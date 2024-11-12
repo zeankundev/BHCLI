@@ -1,0 +1,42 @@
+[package]
+name = "DantcaBot"
+version = "2.1.32"
+edition = "2021"
+
+
+[dependencies]
+anyhow = "1.0.70"
+bresenham = "0.1.1"
+base64 = "0.22.1"
+chrono = "0.4.24"
+clap = { version = "4.2.5", features = ["derive", "env"] }
+clipboard = "0.5.0"
+viuer = "0.6.2"
+colors-transform = "0.2.11"
+confy = "0.5.1"
+crossbeam = "0.8.2"
+crossbeam-channel = "0.5.8"
+rfd = "0.14.1"
+crossterm = { version = "0.26.1" }
+http = "0.2.9"
+image = "0.24.6"
+lazy_static = "1.4.0"
+linkify = "0.9.0"
+log = "0.4.17"
+log4rs = "1.2.0"
+rand = "0.8.5"
+regex = "1.8.1"
+reqwest = { version = "0.11.17", features = ["blocking", "cookies", "socks", "multipart", "json"] }
+rodio = "0.17.1"
+rpassword = "7.2.0"
+select = "0.6.0"
+serde = "1.0.160"
+serde_derive = "1.0.160"
+serde_json = "1.0.96"
+termage = "1.1.1"
+textwrap = "0.16.0"
+toml = "0.7.3"
+tui = { version = "0.19.0", features = ["crossterm"], default-features = false }
+unicode-width = "0.1.10"
+ask_gemini = "0.1.4"
+tokio = { version = "1.39.3", features = ["full"] }

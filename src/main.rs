@@ -308,24 +308,24 @@ impl LeChatPHPClient {
         }
     }
 
-    // Menangani unggahan file
+    // Handle file upload
     fn handle_file_upload(&mut self) {
-        // Gunakan dialog native untuk memilih file
+        // Use native dialog to select file
         if let Some(file_path) = rfd::FileDialog::new().pick_file() {
-            // Buka terminal baru untuk input menggunakan xterm
-            let output = std::process::Command::new("xterm")
+            // Open new terminal for input using xterm
+            if let Ok(output) = std::process::Command::new("xterm")
                 .arg("-e")
-                .arg("bash")
+                .arg("bash") 
                 .arg("-c")
                 .arg(format!(
                     r#"
-                    echo "File yang dipilih: {}";
-                    echo "Pilih tujuan pengiriman:";
-                    echo "1. Kirim ke Semua";
-                    echo "2. Kirim ke Anggota";
-                    echo "3. Kirim ke Staf";
-                    echo "4. Kirim ke Admin";
-                    read -p "Masukkan pilihan (1/2/3/4): " choice;
+                    echo "Selected file: {}";
+                    echo "Choose destination:";
+                    echo "1. Send to All";
+                    echo "2. Send to Members";
+                    echo "3. Send to Staff";
+                    echo "4. Send to Admin";
+                    read -p "Enter choice (1/2/3/4): " choice;
                     case $choice in
                         1) send_to="all" ;;
                         2) send_to="members" ;;
@@ -333,39 +333,43 @@ impl LeChatPHPClient {
                         4) send_to="admins" ;;
                         *) send_to="all" ;;
                     esac
-                    echo "Masukkan pesan:";
+                    echo "Enter message:";
                     read msg;
                     echo "$send_to|$msg" > /tmp/upload_info
                     "#,
                     file_path.display()
                 ))
-                .output()
-                .expect("Gagal menjalankan xterm");
+                .output() {
 
-            // Baca hasil input dari file temporary
-            let upload_info = std::fs::read_to_string("/tmp/upload_info")
-                .expect("Gagal membaca file upload_info");
+                // Read input from temporary file
+                if let Ok(upload_info) = std::fs::read_to_string("/tmp/upload_info") {
+                    let mut parts = upload_info.trim().split('|');
+                    let send_to = parts.next().unwrap_or("").to_string();
+                    let msg = parts.next().unwrap_or("").to_string();
 
-            let mut parts = upload_info.trim().split('|');
-            let send_to = parts.next().unwrap_or("").to_string();
-            let msg = parts.next().unwrap_or("").to_string();
+                    // Convert send_to to appropriate format
+                    let send_to = match send_to.as_str() {
+                        "members" => SEND_TO_MEMBERS,
+                        "staffs" => SEND_TO_STAFFS, 
+                        "admins" => SEND_TO_ADMINS,
+                        _ => SEND_TO_ALL,
+                    }.to_owned();
 
-            // Konversi send_to ke format yang sesuai
-            let send_to = match send_to.as_str() {
-                "members" => SEND_TO_MEMBERS,
-                "staffs" => SEND_TO_STAFFS,
-                "admins" => SEND_TO_ADMINS,
-                _ => SEND_TO_ALL,
-            }.to_owned();
-
-            // Konversi file_path dari PathBuf ke String
-            let file_path_str = file_path.to_str().unwrap_or("").to_string();
-
-            // Kirim permintaan unggah
-            self.post_msg(PostType::Upload(file_path_str, send_to, msg)).unwrap();
-        } 
+                    // Convert file_path from PathBuf to String
+                    if let Some(file_path_str) = file_path.to_str() {
+                        // Send upload request
+                        if let Err(e) = self.post_msg(PostType::Upload(
+                            file_path_str.to_string(),
+                            send_to,
+                            msg
+                        )) {
+                            log::error!("Failed to upload file: {}", e);
+                        }
+                    }
+                }
+            }
+        }
     }
-
 
     fn start_keepalive_thread(
         &self,
@@ -627,6 +631,8 @@ impl LeChatPHPClient {
     }
 
     fn start_cycle(&self, color_only: bool) {
+        let username = self.base_client.username.clone();
+        let username = self.base_client.username.clone();
         let username = self.base_client.username.clone();
         let tx = self.tx.clone();
         let color_rx = Arc::clone(&self.color_rx);
@@ -1289,16 +1295,9 @@ fn handle_remove_name(&mut self, _app: &mut App) {
     }
 
     fn handle_normal_mode_key_event_logout(&mut self) -> Result<(), ExitSignal> {
-        // Hapus semua pesan
-        if let Err(e) = self.post_msg(PostType::DeleteAll) {
-            eprintln!("Gagal menghapus semua pesan: {:?}", e);
-        }
-
-        // Tunggu sebentar untuk memastikan pesan terhapus
-        std::thread::sleep(std::time::Duration::from_secs(1));
-
-        // Lakukan logout
         self.logout().unwrap();
+        let tx = self.tx.clone();
+        tx.send(PostType::Keluar).unwrap();
         return Err(ExitSignal::Terminate);
     }
 
@@ -2128,7 +2127,10 @@ fn process_new_messages(
                         "silentkickdan!" => silentkicktoogle(true, tx),
                         "cleaninbox!" => cleaninbox(tx, &from),
                         "readinbox!" => readinbox(tx, &from),
-                        "shadowleftdan!" => shadowleft(tx, &from),
+                        "shadowleftdan!" => if let Err(e) = shadowleft(tx, &from) {
+                            log::error!("Failed to execute shadowleft command");
+                        },
+                        "dantcahelp!" => dantca_help(tx, &from),
                         _ => {}
                     }
                 } else if msg == "danhelp!" {
@@ -2170,14 +2172,14 @@ fn update_data(users: &Users) {
     
 }
 
-fn shadowleft(tx: &crossbeam_channel::Sender<PostType>, from:&str) {
+fn shadowleft(tx: &crossbeam_channel::Sender<PostType>, from:&str) -> Result<(), ExitSignal> {
     let message = format!("Hallo all skill shadow is actived by {}.. remove all message and logout... passed 20 second --",from);
     tx.send(PostType::Post(message, Some(SEND_TO_ALL.to_owned()))).unwrap();
     thread::sleep(Duration::from_secs(10));
     tx.send(PostType::DeleteAll).unwrap();
     thread::sleep(Duration::from_secs(10));
     tx.send(PostType::Keluar).unwrap();
-
+    return Err(ExitSignal::Terminate);
 }
 fn cleaninbox(tx: &crossbeam_channel::Sender<PostType>, from: &str) {
     tx.send(PostType::InboxClean).unwrap();

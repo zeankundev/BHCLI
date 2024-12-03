@@ -2204,7 +2204,6 @@ fn silentkicktoogle(active: bool, tx: &crossbeam_channel::Sender<PostType>) {
 use reqwest::blocking::Client as OtherClient;
 use serde_json::json;
 use tokio::time::timeout;
-
 const API_KEY: &str = "AIzaSyDlVNRFzHy5_rpx3jxLiuWT5rDJnZMnhlk";
 const MAX_RESPONSE_LENGTH: usize = 1000;
 const API_TIMEOUT: Duration = Duration::from_secs(30);
@@ -2224,9 +2223,17 @@ async fn gemini(tx: &crossbeam_channel::Sender<PostType>, from: &str, msg: &str)
     match timeout(API_TIMEOUT, send_request(&client, url, &body)).await {
         Ok(result) => match result {
             Ok(response) => handle_response(response, tx, from, msg).await,
-            Err(e) => eprintln!("Error sending request: {:?}", e),
+            Err(e) => {
+                eprintln!("Error sending request: {:?}", e);
+                let error_message = format!("Dantca => Maaf, terjadi kesalahan dalam memproses permintaan: {}", e);
+                tx.send(PostType::Post(error_message, Some(SEND_TO_MEMBERS.to_owned()))).unwrap();
+            }
         },
-        Err(_) => eprintln!("API request timed out"),
+        Err(_) => {
+            eprintln!("API request timed out");
+            let timeout_message = "Dantca => Maaf, permintaan ke API memakan waktu terlalu lama. Silakan coba lagi.";
+            tx.send(PostType::Post(timeout_message.to_owned(), Some(SEND_TO_MEMBERS.to_owned()))).unwrap();
+        }
     }
 }
 
@@ -2274,9 +2281,9 @@ for any information command you can try command danhelp! "
             }]
         },
         "generationConfig": {
-            "temperature": 2.0,
-            "topP": 0.95,
-            "topK": 64,
+            "temperature": 0.7,
+            "topP": 0.9,
+            "topK": 40,
             "maxOutputTokens": MAX_RESPONSE_LENGTH,
             "responseMimeType": "text/plain"
         }
@@ -2289,23 +2296,35 @@ async fn send_request(client: &OtherClient, url: &str, body: &serde_json::Value)
         .query(&[("key", API_KEY)])
         .json(body)
         .send()?
-        .text(); // Corrected to use the `?` operator to handle the `Result` value
-    Ok(response?)
+        .text()?;
+    Ok(response)
 }
 
 async fn handle_response(response: String, tx: &crossbeam_channel::Sender<PostType>, from: &str, msg: &str) {
     match serde_json::from_str::<serde_json::Value>(&response) {
         Ok(json_response) => {
-            if let Some(plain_response) = json_response["candidates"][0]["content"]["parts"][0]["text"].as_str() {
-                let message = format_message(from, msg);
-                let plain_message = format!("{}  {}", message, plain_response);
-                let send_to = determine_send_to(msg, from);
-                tx.send(PostType::Post(plain_message, send_to)).unwrap();
-            } else {
-                eprintln!("Response JSON does not have the expected structure");
+            // Tambahkan penanganan yang lebih robust untuk struktur JSON
+            let plain_response = json_response["candidates"]
+                .as_array()
+                .and_then(|candidates| candidates.first())
+                .and_then(|candidate| candidate["content"]["parts"].as_array())
+                .and_then(|parts| parts.first())
+                .and_then(|part| part["text"].as_str())
+                .unwrap_or("Maaf, saya tidak dapat menghasilkan respons saat ini.");
+
+            let message = format_message(from, msg);
+            let plain_message = format!("{}  {}", message, plain_response);
+            let send_to = determine_send_to(msg, from);
+            
+            if let Err(e) = tx.send(PostType::Post(plain_message, send_to)) {
+                eprintln!("Gagal mengirim pesan: {:?}", e);
             }
         },
-        Err(e) => eprintln!("Failed to parse response JSON: {:?}", e),
+        Err(e) => {
+            eprintln!("Gagal parsing respons JSON: {:?}", e);
+            let error_message = format!("Dantca => Maaf, terjadi kesalahan dalam memproses respons: {}", e);
+            tx.send(PostType::Post(error_message, Some(SEND_TO_MEMBERS.to_owned()))).unwrap();
+        }
     }
 }
 

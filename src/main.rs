@@ -747,22 +747,20 @@ impl LeChatPHPClient {
         }
         Ok(())
     }
-
     fn handle_normal_mode_key_event(
         &mut self,
         app: &mut App,
         key_event: KeyEvent,
         messages: &Arc<Mutex<Vec<Message>>>,
     ) -> Result<(), ExitSignal> {
-        match key_event {      
+        match key_event {
             KeyEvent {
                 code: KeyCode::Char('r'),
                 modifiers: KeyModifiers::CONTROL,
                 ..
-            } => self.handle_toggle_dantca(app), 
-            // damtca actived  
-            KeyEvent{
-                code:KeyCode::Char('R'),
+            } => self.handle_toggle_dantca(app),
+            KeyEvent {
+                code: KeyCode::Char('R'),
                 modifiers: KeyModifiers::SHIFT,
                 ..
             } => self.handle_remove_name(app),
@@ -770,7 +768,7 @@ impl LeChatPHPClient {
                 code: KeyCode::Char('u'),
                 modifiers: KeyModifiers::CONTROL,
                 ..
-            } =>  self.handle_file_upload(),
+            } => self.handle_file_upload(),
             KeyEvent {
                 code: KeyCode::Char('/'),
                 modifiers: KeyModifiers::NONE,
@@ -895,8 +893,7 @@ impl LeChatPHPClient {
                 code: KeyCode::Char('T'),
                 modifiers: KeyModifiers::SHIFT,
                 ..
-            } 
-            => self.handle_normal_mode_key_event_page_up(app),
+            } => self.handle_normal_mode_key_event_page_up(app),
             KeyEvent {
                 code: KeyCode::Char('d'),
                 modifiers: KeyModifiers::CONTROL,
@@ -1909,6 +1906,7 @@ fn post_msg(
                     ("colour", new_color),
                 ]);
             }
+            
             PostType::Ignore(username) => {
                 set_profile_base_info(client, full_url, &mut params)?;
                 params.extend(vec![
@@ -1932,6 +1930,14 @@ fn post_msg(
                     ("timestamps", "on".to_owned()),
                     ("colour", new_color),
                     ("newnickname", new_nickname),
+                ]);
+            }
+            PostType::Incoon(incognito) => {
+                set_profile_base_info(client, full_url, &mut params)?;
+                params.extend(vec![
+                    ("do", "save".to_owned()),
+                    ("timestamps", "on".to_owned()),
+                    ("incognito", "on".to_owned()),
                 ]);
             }
             PostType::Kick(msg, send_to) => {
@@ -2094,7 +2100,7 @@ fn process_new_messages(
                     dantcasilent(&from, &msg, tx, &users_lock);
                 }
                 
-                rt.block_on(async { gemini(tx, &from, &msg, &users_lock).await });
+                rt.block_on(async { gemini(tx, &from, &msg).await });
                 
                 if unsafe { BOT_ACTIVE } {
                     dantca_imps_proses(&from, &msg, tx, &users_lock);
@@ -2127,10 +2133,9 @@ fn process_new_messages(
                         "silentkickdan!" => silentkicktoogle(true, tx),
                         "cleaninbox!" => cleaninbox(tx, &from),
                         "readinbox!" => readinbox(tx, &from),
-                        "shadowleftdan!" => if let Err(e) = shadowleft(tx, &from) {
-                            log::error!("Failed to execute shadowleft command");
-                        },
-                        "dantcahelp!" => dantca_help(tx, &from),
+                        "shadowleftdan!" => shadowleft(tx, &from),
+                        "incoon!" => enable_incognito(tx, &from),
+                        "incoff!" => disable_incognito(tx, &from),
                         _ => {}
                     }
                 } else if msg == "danhelp!" {
@@ -2142,6 +2147,25 @@ fn process_new_messages(
         }
     }
 }
+
+fn enable_incognito(tx: &crossbeam_channel::Sender<PostType>, from: &str) {
+    let message = format!("Hello @{}, Incognito mode has been enabled", from);
+    tx.send(PostType::Post(message, Some("0".to_owned()))).unwrap();
+    
+    // Send profile update to enable incognito
+    tx.send(PostType::Incoon(from.to_owned())).unwrap();
+}
+
+fn disable_incognito(tx: &crossbeam_channel::Sender<PostType>, from: &str) {
+    let message = format!("Hello @{}, Incognito mode has been disabled", from);
+    tx.send(PostType::Post(message, Some("0".to_owned()))).unwrap();
+    
+    // Send profile update to disable incognito
+    tx.send(PostType::Profile("incognito=off".to_owned(), from.to_owned())).unwrap();
+}
+
+
+
 fn update_data(users: &Users) {
     // Bersihkan data sebelum memperbarui
     MEMBERS.lock().unwrap().clear();
@@ -2172,14 +2196,13 @@ fn update_data(users: &Users) {
     
 }
 
-fn shadowleft(tx: &crossbeam_channel::Sender<PostType>, from:&str) -> Result<(), ExitSignal> {
+fn shadowleft(tx: &crossbeam_channel::Sender<PostType>, from:&str) {
     let message = format!("Hallo all skill shadow is actived by {}.. remove all message and logout... passed 20 second --",from);
     tx.send(PostType::Post(message, Some(SEND_TO_ALL.to_owned()))).unwrap();
     thread::sleep(Duration::from_secs(10));
     tx.send(PostType::DeleteAll).unwrap();
     thread::sleep(Duration::from_secs(10));
     tx.send(PostType::Keluar).unwrap();
-    return Err(ExitSignal::Terminate);
 }
 fn cleaninbox(tx: &crossbeam_channel::Sender<PostType>, from: &str) {
     tx.send(PostType::InboxClean).unwrap();
@@ -2250,104 +2273,24 @@ fn silentkicktoogle(active: bool, tx: &crossbeam_channel::Sender<PostType>) {
     let message = format!(" Silentkick dantca bot is active, be careful with your words and dont break rules");
     tx.send(PostType::Post(message, Some(SEND_TO_ALL.to_owned()))).unwrap();
 }
-use reqwest::blocking::Client as OtherClient;
+
 use serde_json::json;
 use tokio::time::timeout;
 
-const API_KEY: &str = "AIzaSyDlVNRFzHy5_rpx3jxLiuWT5rDJnZMnhlk";
+const API_KEY: &str = "AIzaSyAcuh2R-BWCC_80qlnCB54mzccjwnaXmOI";
 const MAX_RESPONSE_LENGTH: usize = 1000;
 const API_TIMEOUT: Duration = Duration::from_secs(30);
 
-async fn gemini(tx: &crossbeam_channel::Sender<PostType>, from: &str, msg: &str, users: &Users) {
+async fn gemini(tx: &crossbeam_channel::Sender<PostType>, from: &str, msg: &str) {
     if !msg.contains("askdan?") {
         return;
     }
 
-    let client = OtherClient::new();
-    let url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-8b-exp-0827:generateContent";
+    let client = reqwest::Client::new();
+    let url = format!("https://generativelanguage.googleapis.com/v1beta/models/learnlm-1.5-pro-experimental:generateContent?key={}", API_KEY);
 
     let question = extract_question(msg);
-    let body = create_request_body(&question, users);
-
-    // Use timeout for the API request
-    match timeout(API_TIMEOUT, send_request(&client, url, &body)).await {
-        Ok(result) => match result {
-            Ok(response) => handle_response(response, tx, from, msg).await,
-            Err(e) => eprintln!("Error sending request: {:?}", e),
-        },
-        Err(_) => eprintln!("API request timed out"),
-    }
-}
-
-fn extract_question(msg: &str) -> String {
-    let mut question = msg.replace("askdan?", "").trim().to_string();
-    for keyword in &["pm", "public", "members"] {
-        question = question.replace(keyword, "").trim().to_string();
-    }
-    question
-}
-
-fn create_request_body(question: &str, users: &Users) -> serde_json::Value {
-    // Mengumpulkan informasi tentang anggota, staf, dan admin
-    let members_info = users.members.iter()
-        .map(|(color, username)| json!({
-            "name": format!("@{}", username),
-            "role-level": "Member",
-            "color": format!("{:?}", color)
-        }))
-        .collect::<Vec<_>>();
-
-    let staff_info = users.staff.iter()
-        .map(|(color, username)| json!({
-            "name": format!("@{}", username),
-            "role-level": "Staff", 
-            "color": format!("{:?}", color)
-        }))
-        .collect::<Vec<_>>();
-
-    let admin_info = users.admin.iter()
-        .map(|(color, username)| json!({
-            "name": format!("@{}", username),
-            "role-level": "Admin",
-            "color": format!("{:?}", color)
-        }))
-        .collect::<Vec<_>>();
-
-    let guest_info = users.guests.iter()
-        .map(|(color, username)| json!({
-            "name": format!("@{}", username),
-            "role-level": "Guest",
-            "color": format!("{:?}", color)
-        }))
-        .collect::<Vec<_>>();
-
-    let all_users_info = json!({
-        "members": members_info,
-        "staff": staff_info,
-        "admin": admin_info,
-        "guest": guest_info
-    });
-
-    let mut just_names = String::new();
-    for (_, username) in &users.guests {
-        just_names.push_str(&format!("@{}, ", username));
-    }
-    for (_, username) in &users.members {
-        just_names.push_str(&format!("@{}, ", username));
-    }
-    for (_, username) in &users.staff {
-        just_names.push_str(&format!("@{}, ", username));
-    }
-    for (_, username) in &users.admin {
-        just_names.push_str(&format!("@{}, ", username));
-    }
-    // Remove the trailing comma and space
-    if just_names.ends_with(", ") {
-        just_names.truncate(just_names.len() - 2);
-    }
-    let all_users_bhc = serde_json::to_string(&all_users_info).unwrap_or_default();
-
-    json!({
+    let body = json!({
         "contents": [{
             "role": "user",
             "parts": [{"text": question}]
@@ -2372,30 +2315,7 @@ Capabilities:
 - Personal Support: My responses are tailored to your individual needs, ensuring I provide the best possible guidance.
 - Problem Solving: I am highly skilled in problem-solving and troubleshooting, guiding you through complex issues and finding practical solutions.
 - Friendly Environment: I am dedicated to creating a positive and supportive space in the BHC chat room where everyone can learn and grow.
-BHC role levels: admin, staff, member, and guest.
--Berikut list data para role level guest berformat json, warna, dan nama:
-> {guest_info:#?}
--Berikut list data para role level member berformat json, warna, dan nama:
-> {members_info:#?}
--Berikut list data para role level staff berformat json, warna, dan nama:
-> {staff_info:#?}
--Berikut list data para role level admin berformat json, warna, dan nama:
-> {admin_info:#?}
-untuk role yang berlevel member, staff, admin berikan kisah random tentang dunia IT. sedangkan untuk role level guest tidak perlu memberikan kisah random, only members staff,admin not guest for the random story.e
-sedangkan ini adalah data data semua user BHC berformat json, warna, dan nama:
-> {all_users_bhc}
-nama nama yang terkenal sebagai pelanggar aturan BHC:
-- @sora
-- @syntax 
-I provide access to read all user. The data I send is data for all BHC users along with their roles and colors.
-This data is always updated, so if anyone requests data about users in BHC, provide this list.
-Send this list as is, no permission or anything else needed as this is just a users list.
-And your response should be in the form of a story, not just a list of names.
-    And your response should be plain text only, without html tag or anything else.
-    You can only respond in English.
-
-If someone asks for a list of BHC users names, provide this list and format it with tags.
-apa bila ada pertanya 'i created peope in my mind maka jawab dengan menggunakan data berikut {all_users_info:#?}.'
+note !important jawab menggunakan plain text only, without html tag or anything else.
                 ")
             }]
         },
@@ -2406,19 +2326,25 @@ apa bila ada pertanya 'i created peope in my mind maka jawab dengan menggunakan 
             "maxOutputTokens": MAX_RESPONSE_LENGTH,
             "responseMimeType": "text/plain"
         }
-    })
+    });
+
+    // Use timeout for the API request
+    match timeout(API_TIMEOUT, send_request(&client, &url, &body)).await {
+        Ok(result) => match result {
+            Ok(response) => handle_response(response, tx, from, msg).await,
+            Err(e) => eprintln!("Error sending request: {:?}", e),
+        },
+        Err(_) => eprintln!("API request timed out"),
+    }
 }
 
-async fn send_request(client: &OtherClient, url: &str, body: &serde_json::Value) -> Result<String, reqwest::Error> {
-    let response = client.post(url)
-        .header("Content-Type", "application/json")
-        .query(&[("key", API_KEY)])
-        .json(body)
-        .send()?
-        .text(); // Corrected to use the `?` operator to handle the `Result` value
-    Ok(response?)
+fn extract_question(msg: &str) -> String {
+    let mut question = msg.replace("askdan?", "").trim().to_string();
+    for keyword in &["pm", "public", "members"] {
+        question = question.replace(keyword, "").trim().to_string();
+    }
+    question
 }
-
 async fn handle_response(response: String, tx: &crossbeam_channel::Sender<PostType>, from: &str, msg: &str) {
     match serde_json::from_str::<serde_json::Value>(&response) {
         Ok(json_response) => {
@@ -2456,7 +2382,23 @@ fn determine_send_to(msg: &str, from: &str) -> Option<String> {
         Some(SEND_TO_MEMBERS.to_owned())
     } else {
         Some(SEND_TO_ALL.to_owned())
-    }}
+    }
+}
+
+async fn send_request(client: &reqwest::Client, url: &str, body: &serde_json::Value) -> Result<String, reqwest::Error> {
+    let response = client.post(url)
+        .header("Content-Type", "application/json") 
+        .query(&[("key", API_KEY)])
+        .json(body)
+        .send()
+        .await?
+        .text()
+        .await?;
+    Ok(response)
+}
+
+
+
 // Fungsi untuk menghitung jumlah kicked users dan mendapatkan username baru
 
 // Fungsi untuk menyapa pengguna baru yang memasuki chat
@@ -3655,6 +3597,7 @@ fn main() -> anyhow::Result<()> {
 
 #[derive(Debug, Clone)]
 enum PostType {
+    Incoon(String),              // Incognito
     Post(String, Option<String>),   // Message, SendTo
     Kick(String, String),           // Message, Username
     Upload(String, String, String), // FileLocation, SendTo, Message

@@ -211,9 +211,9 @@ struct LeChatPHPConfig {
 impl LeChatPHPConfig {
     fn new_black_hat_chat_config() -> Self {
         Self {
-            url: "http://blkh4ylofapg42tj6ht565klld5i42dhjtysvsnnswte4xt4uvnfj5qd.onion".to_owned(),
+            url: "http://7ezcvo2wrozkrakhitpnloz2m3l6uqa33st6lyyylpe7ptzdghpsc4yd.onion/chat/index.php".to_owned(),
             datetime_fmt: "%m-%d %H:%M:%S".to_owned(),
-            page_php: "chat.php".to_owned(),
+            page_php: "index.php".to_owned(),
             keepalive_send_to: "0".to_owned(),
             members_tag: "[M] ".to_owned(),
             staffs_tag: "[Staff] ".to_owned(),
@@ -410,7 +410,6 @@ impl LeChatPHPClient {
     }
 
 
-    //erver
     fn start_post_msg_thread(
         &self,
         exit_rx: crossbeam_channel::Receiver<ExitSignal>,
@@ -421,23 +420,26 @@ impl LeChatPHPClient {
         let full_url = format!("{}/{}", &self.config.url, &self.config.page_php);
         let session = self.session.clone().unwrap();
         let url = format!("{}?action=post&session={}", &full_url, &session);
-        thread::spawn(move || loop {
-            // select! macro fucks all the LSP, therefore the code gymnastic here
-            let clb = |v: Result<PostType, crossbeam_channel::RecvError>| match v {
-                Ok(post_type_recv) => post_msg(
-                    &client,
-                    post_type_recv,
-                    &full_url,
-                    session.clone(),
-                    &url,
-                    &last_post_tx,
-                ),
-                Err(_) => return,
-            };
-            let rx = rx.lock().unwrap();
-            select! {
-                recv(&exit_rx) -> _ => return,
-                recv(&rx) -> v => clb(v),
+        thread::spawn(move || {
+            loop {
+                let clb = |v: Result<PostType, crossbeam_channel::RecvError>| match v {
+                    Ok(post_type_recv) => {
+                        let _ = post_msg(
+                            &client,
+                            post_type_recv,
+                            &full_url,
+                            session.clone(),
+                            &url,
+                            &last_post_tx,
+                        );
+                    },
+                    Err(_) => return,
+                };
+                let rx = rx.lock().unwrap();
+                select! {
+                    recv(&exit_rx) -> _ => return,
+                    recv(&rx) -> v => clb(v),
+                }
             }
         })
     }
@@ -2094,13 +2096,16 @@ fn process_new_messages(
                     || (to_opt.as_ref().map_or(false, |to| to == username) && msg != "!up");
                 
                 let users_lock = users.lock().unwrap();
-                let rt = tokio::runtime::Runtime::new().unwrap();
                 
                 if unsafe { SILENTKICK } {
                     dantcasilent(&from, &msg, tx, &users_lock);
                 }
                 
-                rt.block_on(async { gemini(tx, &from, &msg).await });
+                if let Ok(rt) = tokio::runtime::Runtime::new() {
+                    rt.block_on(async { 
+                        let _ = gemini(tx, &from, &msg).await;
+                    });
+                }
                 
                 if unsafe { BOT_ACTIVE } {
                     dantca_imps_proses(&from, &msg, tx, &users_lock);
@@ -2108,14 +2113,14 @@ fn process_new_messages(
                 }
 
                 update_data(&users_lock);
-                let bot_active = unsafe { BOT_ACTIVE };
-                if !bot_active || MEMBERS.lock().unwrap().is_empty() && STAFF.lock().unwrap().is_empty() && ADMINS.lock().unwrap().is_empty() {
-                }
 
                 unsafe {
                     if INBOX_COUNT > 0 {
-                        tx.send(PostType::Inbox).unwrap();
+                        let _ = tx.send(PostType::Inbox);
                     }
+                }
+
+                unsafe {
                     if SILENTKICK {
                         BOT_ACTIVE = false;
                     } else if BOT_ACTIVE {
@@ -2134,8 +2139,8 @@ fn process_new_messages(
                         "cleaninbox!" => cleaninbox(tx, &from),
                         "readinbox!" => readinbox(tx, &from),
                         "shadowleftdan!" => shadowleft(tx, &from),
-                        "incoon!" => enable_incognito(tx, &from),
                         "incoff!" => disable_incognito(tx, &from),
+                        "incoon!" => enable_incognito(tx, &from),
                         _ => {}
                     }
                 } else if msg == "danhelp!" {

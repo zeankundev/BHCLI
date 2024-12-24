@@ -80,7 +80,7 @@ const NICKNAME_ERR: &str = "Invalid nickname";
 const CAPTCHA_WG_ERR: &str = "Wrong Captcha";
 const CAPTCHA_USED_ERR: &str = "Captcha already used or timed out";
 const UNKNOWN_ERR: &str = "Unknown error";
-const DNMX_URL: &str = "http://hxuzjtocnzvv5g2rtg2bhwkcbupmk7rclb6lly3fo4tvqkk5oyrv3nid.onion";
+const DNMX_URL: &str = "http://.onion";
 // const BHCLI_BLOG_URL: &str = "sss";
 
 
@@ -387,7 +387,7 @@ impl LeChatPHPClient {
                     Keep it legal and enjoy your stay. 
                     You can try !-rules && ! help before. Please follow the !-rules
                      [color=#00ff08]kicked users in the sesions chat -> {} <- [/color] (Auto message)", kicked_count);
-                    tx.send(PostType::Post(msg_keep.to_owned(), Some(SEND_TO_ALL.to_owned()))).unwrap();
+                    tx.send(PostType::Post(msg_keep.to_owned(), Some('0'.to_owned()))).unwrap();
                     thread::sleep(Duration::from_secs(280));
                     tx.send(PostType::DeleteLast).unwrap();
                 };
@@ -1152,7 +1152,6 @@ fn handle_remove_name(&mut self, _app: &mut App) {
             }
         }
     }
-
     fn handle_normal_mode_key_event_yank(&mut self, app: &mut App) {
         if let Some(idx) = app.items.state.selected() {
             if let Some(item) = app.items.items.get(idx) {
@@ -1161,12 +1160,17 @@ fn handle_remove_name(&mut self, _app: &mut App) {
                     let mut out = format!("{}{}", self.config.url, upload_link);
                     if let Some((_, _, msg)) = get_message(&item.text, &self.config.members_tag) {
                         out = format!("{} {}", msg, out);
+                    } else if let Some((_, _, msg)) = get_message(&item.text, &self.config.staffs_tag) {
+                        out = format!("{} {}", msg, out);
                     }
                     ctx.set_contents(out).unwrap();
-                } else if let Some((_, _, msg)) = get_message(&item.text, &self.config.members_tag)
-                {
+                } else {
                     let mut ctx: ClipboardContext = ClipboardProvider::new().unwrap();
-                    ctx.set_contents(msg).unwrap();
+                    if let Some((_, _, msg)) = get_message(&item.text, &self.config.members_tag) {
+                        ctx.set_contents(msg).unwrap();
+                    } else if let Some((_, _, msg)) = get_message(&item.text, &self.config.staffs_tag) {
+                        ctx.set_contents(msg).unwrap();
+                    }
                 }
             }
         }
@@ -1179,8 +1183,16 @@ fn handle_remove_name(&mut self, _app: &mut App) {
                     let mut ctx: ClipboardContext = ClipboardProvider::new().unwrap();
                     let out = format!("{}{}", self.config.url, upload_link);
                     ctx.set_contents(out).unwrap();
-                } else if let Some((_, _, msg)) = get_message(&item.text, &self.config.members_tag)
-                {
+                } else {
+                    // Try both members and staff tags
+                    let msg = if let Some((_, _, msg)) = get_message(&item.text, &self.config.members_tag) {
+                        msg
+                    } else if let Some((_, _, msg)) = get_message(&item.text, &self.config.staffs_tag) {
+                        msg 
+                    } else {
+                        return;
+                    };
+
                     let finder = LinkFinder::new();
                     let links: Vec<_> = finder.links(msg.as_str()).collect();
                     if let Some(link) = links.get(0) {
@@ -2092,7 +2104,7 @@ fn process_new_messages(
 
         for new_msg in filtered {
             if let Some((from, to_opt, msg)) = get_message(&new_msg.text, members_tag) {
-                *should_notify |= msg.contains(&format!("@{}", username)) 
+                *should_notify |= msg.contains(&format!("{}", username)) 
                     || (to_opt.as_ref().map_or(false, |to| to == username) && msg != "!up");
                 
                 let users_lock = users.lock().unwrap();

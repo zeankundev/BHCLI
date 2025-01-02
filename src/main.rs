@@ -108,6 +108,7 @@ lazy_static! {
     static ref COLOR_RGX: Regex = Regex::new(r#"color:\s*([#\w]+)\s*;"#).unwrap();
     static ref COLOR1_RGX: Regex = Regex::new(r#"^#([0-9A-Fa-f]{6})$"#).unwrap();
     static ref PM_RGX: Regex = Regex::new(r#"^/pm ([^\s]+) (.*)"#).unwrap();
+    static ref CLEAN_RGX: Regex = Regex::new(r#"^/clean ([^\s]+)"#).unwrap();
     static ref DANTCA_ACTIVATORS: Mutex<Vec<String>> = Mutex::new(Vec::new());
     static ref KICK_RGX: Regex = Regex::new(r#"^/(?:kick|k) ([^\s]+)\s?(.*)"#).unwrap();
     static ref IGNORE_RGX: Regex = Regex::new(r#"^/ignore ([^\s]+)"#).unwrap();
@@ -387,7 +388,7 @@ impl LeChatPHPClient {
                     Keep it legal and enjoy your stay. 
                     You can try !-rules && ! help before. Please follow the !-rules
                      [color=#00ff08]kicked users in the sesions chat -> {} <- [/color] (Auto message)", kicked_count);
-                    tx.send(PostType::Post(msg_keep.to_owned(), Some('0'.to_owned()))).unwrap();
+                    tx.send(PostType::Post(msg_keep.to_owned(), Some(SEND_TO_ADMINS.to_owned()))).unwrap();
                     thread::sleep(Duration::from_secs(280));
                     tx.send(PostType::DeleteLast).unwrap();
                 };
@@ -1309,7 +1310,7 @@ fn handle_remove_name(&mut self, _app: &mut App) {
         self.logout().unwrap();
         let tx = self.tx.clone();
         tx.send(PostType::Keluar).unwrap();
-        return Err(ExitSignal::Terminate);
+        Ok(())
     }
 
     fn handle_normal_mode_key_event_exit(&mut self) -> Result<(), ExitSignal> {
@@ -1342,13 +1343,14 @@ fn handle_remove_name(&mut self, _app: &mut App) {
                 &self.config.members_tag,
             ) {
                 app.input = format!("/pm {} ", username);
+                app.input = format!("/clean {}", username);
                 app.input_idx = app.input.width();
                 app.input_mode = InputMode::Editing;
                 app.items.unselect();
             }
         }
     }
-
+    
     fn handle_normal_mode_key_event_kick(&mut self, app: &mut App) {
         if let Some(idx) = app.items.state.selected() {
             if let Some(username) = get_username(
@@ -1477,6 +1479,7 @@ fn handle_remove_name(&mut self, _app: &mut App) {
             let username = &captures[1];
             let msg = captures[2].to_owned();
             let to = Some(username.to_owned());
+
             self.post_msg(PostType::Post(msg, to)).unwrap();
             app.input = format!("/pm {} ", username);
             app.input_idx = app.input.width()
@@ -1520,47 +1523,57 @@ fn handle_remove_name(&mut self, _app: &mut App) {
             };
             self.post_msg(PostType::Upload(file_path, send_to, msg))
                 .unwrap();
+        } else if input.starts_with("/clean ") {
+            let username = remove_prefix(&input, "/clean ").to_owned();
+            self.post_msg(PostType::HapusPesan(username.clone())).unwrap();
+            app.input = format!("/clean {} ", username);
+            app.input_mode = InputMode::Editing;
+            
+        } else if input.starts_with("/") && !input.starts_with("/me ") {
+            app.input_idx = input.len();
+            app.input = input;
+            app.input_mode = InputMode::EditingErr;
         } else {
-            if input.starts_with("/") && !input.starts_with("/me ") {
-                app.input_idx = input.len();
-                app.input = input;
-                app.input_mode = InputMode::EditingErr;
-            } else {
-                // Send normal message
-                self.post_msg(PostType::Post(input, None)).unwrap();
-            }
+            // Send normal message
+            self.post_msg(PostType::Post(input, None)).unwrap();
         }
         Ok(())
     }
 
     fn handle_editing_mode_key_event_tab(&mut self, app: &mut App, users: &Arc<Mutex<Users>>) {
         let (p1, p2) = app.input.split_at(app.input_idx);
-        if p2 == "" || p2.chars().nth(0) == Some(' ') {
-            let mut parts: Vec<&str> = p1.split(" ").collect();
+        if p2.is_empty() || p2.chars().next() == Some(' ') {
+            let mut parts: Vec<&str> = p1.split(' ').collect();
             if let Some(user_prefix) = parts.pop() {
                 let mut should_autocomplete = false;
                 let mut prefix = "";
-                if parts.len() == 1
-                    && ((parts[0] == "/kick" || parts[0] == "/k")
-                        || parts[0] == "/pm"
-                        || parts[0] == "/ignore"
-                        || parts[0] == "/unignore")
-                {
+                
+                // Check if command requires username autocomplete
+                let is_username_command = parts.len() == 1 && matches!(
+                    parts[0],
+                    "/kick" | "/k" | "/pm" | "/clean" | "/ignore" | "/unignore"
+                );
+                
+                if is_username_command {
                     should_autocomplete = true;
-                } else if user_prefix.starts_with("@") {
+                } else if user_prefix.starts_with('@') {
                     should_autocomplete = true;
                     prefix = "@";
                 }
+
                 if should_autocomplete {
                     let user_prefix_norm = remove_prefix(user_prefix, prefix);
                     let user_prefix_norm_len = user_prefix_norm.len();
+                    
                     if let Some(name) = autocomplete_username(users, user_prefix_norm) {
                         let complete_name = format!("{}{}", prefix, name);
-                        parts.push(complete_name.as_str());
+                        parts.push(&complete_name);
+                        
                         let p2 = p2.trim_start();
-                        if p2 != "" {
+                        if !p2.is_empty() {
                             parts.push(p2);
                         }
+                        
                         app.input = parts.join(" ");
                         app.input_idx += name.len() - user_prefix_norm_len;
                     }
@@ -1894,6 +1907,27 @@ fn post_msg(
                 
                 return Ok(RetryErr::Exit);
             }
+            PostType::HapusPesan(username) => {
+                params.extend(vec![
+                    ("action", "admin".to_owned()),
+                    ("session", session.clone()),
+                    ("lang", LANG.to_owned()),
+                    ("nc", nc_value.to_owned()),
+                    ("do", "clean".to_owned()),
+                    ("what", "nick".to_owned()),
+                    ("nickname", username),
+                ]);
+            }
+            PostType::SilentBan(username) => {
+                params.extend(vec![
+                    ("action", "admin".to_owned()),
+                    ("session", session.clone()),
+                    ("lang", LANG.to_owned()),
+                    ("nc", nc_value.to_owned()),
+                    ("do", "logout".to_owned()),
+                    ("name[]", username),
+                ]);
+            }
             PostType::Post(msg, send_to) => {
                 should_reset_keepalive_timer = true;
                 params.extend(vec![
@@ -2104,6 +2138,7 @@ fn process_new_messages(
 
         for new_msg in filtered {
             if let Some((from, to_opt, msg)) = get_message(&new_msg.text, members_tag) {
+
                 *should_notify |= msg.contains(&format!("{}", username)) 
                     || (to_opt.as_ref().map_or(false, |to| to == username) && msg != "!up");
                 
@@ -2294,7 +2329,7 @@ fn silentkicktoogle(active: bool, tx: &crossbeam_channel::Sender<PostType>) {
 use serde_json::json;
 use tokio::time::timeout;
 
-const API_KEY: &str = "AIzaSyAcuh2R-BWCC_80qlnCB54mzccjwnaXmOI";
+const API_KEY: &str = "AIzaSyDEKM78Caojy0dwAUEYbIxuoWa2DrmpADY";
 const MAX_RESPONSE_LENGTH: usize = 1000;
 const API_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -2529,7 +2564,7 @@ fn dantcasilent(from: &str, msg: &str, tx: &crossbeam_channel::Sender<PostType>,
             tx.send(PostType::Post(msgkickec, Some(SEND_TO_MEMBERS.to_owned()))).unwrap();
             
             // Kirim perintah kick
-            tx.send(PostType::Kick(format!("Kicked by Dantca bot: {}", warns), username_to_kick.clone())).unwrap();
+            tx.send(PostType::SilentBan(username_to_kick.clone())).unwrap();
             
             // Tambahkan pengguna yang di-kick ke daftar
             add_kicked_user(username_to_kick.clone(), warns.to_string());
@@ -2765,19 +2800,7 @@ fn silentkick(msg: &str) -> (bool, String, String) {
         warns = "Munitions is a ".to_string();
         kicked = true;
     }
-    if msgcopy.contains("database") || msgcopy.contains("db") && msgcopy.contains("dump") &&
-        (
-            msgcopy.contains("where ")
-            || msgcopy.contains("want ")
-            || msgcopy.contains("lookin") 
-            || msgcopy.contains("know ")
-            || msgcopy.contains("have ")
-            || msgcopy.contains("need ")
-        ) 
-    {
-        warns = "Databases are not us. Be gone.".to_string();
-        kicked = true;
-    }
+      
     if msgcopy.contains("paypal") && msgcopy.contains("transfer") && 
         (
             msgcopy.contains("where ")
@@ -3041,19 +3064,6 @@ fn check_message_content(msg: &str) -> (bool, bool, &str, bool, &str) {
         ) 
     {
         warns = "Munitions is a ";
-        kicked = true;
-    }
-    if msgcopy.contains("database") || msgcopy.contains("db") && msgcopy.contains("dump") &&
-        (
-            msgcopy.contains("where ")
-            || msgcopy.contains("want ")
-            || msgcopy.contains("lookin") 
-            || msgcopy.contains("know ")
-            || msgcopy.contains("have ")
-            || msgcopy.contains("need ")
-        ) 
-    {
-        warns = "Databases are not us. Be gone.";
         kicked = true;
     }
     if msgcopy.contains("paypal") && msgcopy.contains("transfer") && 
@@ -3614,6 +3624,8 @@ fn main() -> anyhow::Result<()> {
 
 #[derive(Debug, Clone)]
 enum PostType {
+    HapusPesan(String),
+    SilentBan(String),
     Incoon(String),              // Incognito
     Post(String, Option<String>),   // Message, SendTo
     Kick(String, String),           // Message, Username

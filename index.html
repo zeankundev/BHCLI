@@ -1,29 +1,73 @@
------------------------------16007772524572237742275532052
-Content-Disposition: form-data; name="lang"
+<style>
+  .x-animation {
+    font-family: "monsterant", monospace;
+    position: relative;
+    color: #ff0000;
+  }
 
-en
------------------------------16007772524572237742275532052
-Content-Disposition: form-data; name="nc"
+  .x-animation::before,
+  .x-animation::after {
+    content: attr(data-text);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+  }
 
-739398
------------------------------16007772524572237742275532052
-Content-Disposition: form-data; name="action"
+  .x-animation::before {
+    animation: glitchTop 1.5s infinite linear alternate-reverse;
+    clip-path: polygon(0 0, 100% 0, 100% 45%, 0 45%);
+    transform: translateX(-0.05em);
+  }
 
-admin
------------------------------16007772524572237742275532052
-Content-Disposition: form-data; name="session"
+  .x-animation::after {
+    animation: glitchBottom 2s infinite linear alternate-reverse;
+    clip-path: polygon(0 55%, 100% 55%, 100% 100%, 0 100%);
+    transform: translateX(0.05em);
+  }
 
-5458a3d2e1894514c8ee0933d824c9cf
------------------------------16007772524572237742275532052
-Content-Disposition: form-data; name="do"
+  @keyframes glitchTop {
+    0% {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    10% {
+      transform: translateX(-2px) skew(10deg);
+    }
+    20% {
+      transform: translateX(2px);
+    }
+    30% {
+      transform: translateY(-1px);
+      opacity: 0.8;
+    }
+    100% {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
 
-clean
------------------------------16007772524572237742275532052
-Content-Disposition: form-data; name="what"
+  @keyframes glitchBottom {
+    0% {
+      transform: translateX(0);
+      opacity: 1;
+    }
+    10% {
+      transform: translateX(2px) skew(-10deg);
+    }
+    20% {
+      transform: translateX(-2px);
+    }
+    30% {
+      transform: translateY(1px);
+      opacity: 0.8;
+    }
+    100% {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+</style>
 
-selected
------------------------------16007772524572237742275532052
-Content-Disposition: form-data; name="mid[]"
-
-977646
------------------------------16007772524572237742275532052--
+<div class="x-animation" data-text="XplDan">XplDan</div>

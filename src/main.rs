@@ -384,11 +384,13 @@ impl LeChatPHPClient {
             loop {
                 let keep_msg = || {
                     let kicked_count = unsafe { KICKED_COUNT };
-                    let msg_keep = format!("[color=#ffffff]>>> H-E-L-L-O C-H-A-T-T-E-R-S W-E-L-C-O-M-E B-A-C-K TO BHC <<<[/color]
+                    let msg_keep = format!("
+                    [color=#ffffff]>>> H-E-L-L-O C-H-A-T-T-E-R-S W-E-L-C-O-M-E B-A-C-K TO BHC <<<[/color]
                     Keep it legal and enjoy your stay. 
                     You can try !-rules && ! help before. Please follow the !-rules
-                     [color=#00ff08]kicked users in the sesions chat -> {} <- [/color] (Auto message)", kicked_count);
-                    tx.send(PostType::Post(msg_keep.to_owned(), Some(SEND_TO_ADMINS.to_owned()))).unwrap();
+                     [color=#00ff08]kicked users in the sesions chat -> {} <- [/color] (Auto message)
+                     ", kicked_count);
+                    tx.send(PostType::Post(msg_keep.to_owned(), Some(SEND_TO_ALL.to_owned()))).unwrap();
                     thread::sleep(Duration::from_secs(280));
                     tx.send(PostType::DeleteLast).unwrap();
                 };
@@ -1343,7 +1345,6 @@ fn handle_remove_name(&mut self, _app: &mut App) {
                 &self.config.members_tag,
             ) {
                 app.input = format!("/pm {} ", username);
-                app.input = format!("/clean {}", username);
                 app.input_idx = app.input.width();
                 app.input_mode = InputMode::Editing;
                 app.items.unselect();
@@ -1527,8 +1528,11 @@ fn handle_remove_name(&mut self, _app: &mut App) {
             let username = remove_prefix(&input, "/clean ").to_owned();
             self.post_msg(PostType::HapusPesan(username.clone())).unwrap();
             app.input = format!("/clean {} ", username);
-            app.input_mode = InputMode::Editing;
             
+        }else if input.starts_with("/logout ") {
+            let username = remove_prefix(&input, "/logout ").to_owned();
+            self.post_msg(PostType::SilentBan(username.clone())).unwrap();
+            app.input = format!("/logout {} ", username);
         } else if input.starts_with("/") && !input.starts_with("/me ") {
             app.input_idx = input.len();
             app.input = input;
@@ -1551,7 +1555,7 @@ fn handle_remove_name(&mut self, _app: &mut App) {
                 // Check if command requires username autocomplete
                 let is_username_command = parts.len() == 1 && matches!(
                     parts[0],
-                    "/kick" | "/k" | "/pm" | "/clean" | "/ignore" | "/unignore"
+                    "/kick" | "/k" | "/pm" | "/clean" | "/ignore" | "/unignore" | "/logout"
                 );
                 
                 if is_username_command {

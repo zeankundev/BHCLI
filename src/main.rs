@@ -17,6 +17,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+
 use lazy_static::lazy_static;
 use linkify::LinkFinder;
 use log::LevelFilter;
@@ -59,8 +60,6 @@ const SEND_TO_ALL: &str = "s *";
 const SEND_TO_MEMBERS: &str = "s ?";
 static mut BOT_ACTIVE: bool = false;
 static mut REMOVE_NAME: bool = false;
-
-// Jumlah pengguna yang telah di-kick
 static mut KICKED_COUNT: usize = 0;
 
 // Fungsi untuk mengatur BOT_ACTIVE dan REMOVE_NAME
@@ -86,6 +85,8 @@ const DNMX_URL: &str = "http://.onion";
 
 
 lazy_static! {
+    static ref MODE_ROOM:Mutex<Vec<String>> = Mutex::new(Vec::new());
+
     static ref MEMBERS: Mutex<Vec<String>> = Mutex::new(Vec::new());
     static ref STAFF: Mutex<Vec<String>> = Mutex::new(Vec::new());
     static ref ADMINS: Mutex<Vec<String>> = Mutex::new(Vec::new());
@@ -118,6 +119,7 @@ lazy_static! {
     static ref FIND_RGX: Regex = Regex::new(r#"^/f\s(.*)$"#).unwrap();
     static ref NEW_NICKNAME_RGX: Regex = Regex::new(r#"^/nick\s(.*)$"#).unwrap();
     static ref NEW_COLOR_RGX: Regex = Regex::new(r#"^/color\s(.*)$"#).unwrap();
+    
 }
 
 fn default_empty_str() -> String {
@@ -384,12 +386,23 @@ impl LeChatPHPClient {
             loop {
                 let keep_msg = || {
                     let kicked_count = unsafe { KICKED_COUNT };
+                    let mode_room = MODE_ROOM.lock().unwrap();
+                    let mode_desc = match mode_room[0].as_str() {
+                        "1" => "all",
+                        "2" => "waiting",
+                        "3" => "staff", 
+                        "4" => "members",
+                        _ => "unknown"
+                    };
+                    
                     let msg_keep = format!("
                     [color=#ffffff]>>> H-E-L-L-O C-H-A-T-T-E-R-S W-E-L-C-O-M-E B-A-C-K TO BHC <<<[/color]
                     Keep it legal and enjoy your stay. 
                     You can try !-rules && ! help before. Please follow the !-rules
-                     [color=#00ff08]kicked users in the sesions chat -> {} <- [/color] (Auto message)
-                     ", kicked_count);
+                     [color=#00ff08]kicked users in the sesions chat -> {} <- [/color]
+                     Room Mode: {} - {}
+                     (Auto message)
+                     ", kicked_count, mode_room[0], mode_desc);
                     tx.send(PostType::Post(msg_keep.to_owned(), Some(SEND_TO_ALL.to_owned()))).unwrap();
                     thread::sleep(Duration::from_secs(280));
                     tx.send(PostType::DeleteLast).unwrap();
@@ -1527,12 +1540,31 @@ fn handle_remove_name(&mut self, _app: &mut App) {
         } else if input.starts_with("/clean ") {
             let username = remove_prefix(&input, "/clean ").to_owned();
             self.post_msg(PostType::HapusPesan(username.clone())).unwrap();
-            app.input = format!("/clean {} ", username);
             
         }else if input.starts_with("/logout ") {
             let username = remove_prefix(&input, "/logout ").to_owned();
             self.post_msg(PostType::SilentBan(username.clone())).unwrap();
-            app.input = format!("/logout {} ", username);
+        }else if input.starts_with("/mode ") {
+            let mode_str = remove_prefix(&input, "/mode ");
+            let mode = match mode_str {
+                "all" => "1",
+                "waiting" => "2", 
+                "staff" => "3",
+                "members" => "4",
+                _ => mode_str
+            };
+            let mut mode_room = MODE_ROOM.lock().unwrap();
+            mode_room.push(mode.to_string());
+            self.post_msg(PostType::ModeRoom(mode.to_owned())).unwrap();
+            let mode_desc = match mode {
+                "1" => "all",
+                "2" => "waiting", 
+                "3" => "staff",
+                "4" => "members",
+                _ => "unknown"
+            };
+            let msg = format!("Mode room changed to {} ({})", mode_desc, mode);
+            self.post_msg(PostType::Post(msg, Some(SEND_TO_ALL.to_owned()))).unwrap();
         } else if input.starts_with("/") && !input.starts_with("/me ") {
             app.input_idx = input.len();
             app.input = input;
@@ -1830,6 +1862,16 @@ fn post_msg(
         let mut form: Option<multipart::Form> = None;
 
         match post_type { 
+            PostType::ModeRoom(mode) => {
+                params.extend(vec![
+                    ("action", "admin".to_owned()),
+                    ("do", "guestaccess".to_owned()),
+                    ("guestaccess", mode.to_owned()),
+                    ("session", session.clone()),
+                    ("lang", LANG.to_owned()),
+                    ("nc", nc_value.to_owned()),
+                ]);
+            }
             PostType::InboxClean => {
                 params.extend(vec![
                     ("action", "inbox".to_owned()),
@@ -3628,6 +3670,7 @@ fn main() -> anyhow::Result<()> {
 
 #[derive(Debug, Clone)]
 enum PostType {
+    ModeRoom(String),
     HapusPesan(String),
     SilentBan(String),
     Incoon(String),              // Incognito

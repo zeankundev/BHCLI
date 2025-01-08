@@ -85,7 +85,9 @@ const DNMX_URL: &str = "http://.onion";
 
 
 lazy_static! {
-    static ref MODE_ROOM:Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+    static ref MODE_ROOM: Mutex<String> = Mutex::new(String::new());
+    static ref USER_AGENTS: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
 
     static ref MEMBERS: Mutex<Vec<String>> = Mutex::new(Vec::new());
     static ref STAFF: Mutex<Vec<String>> = Mutex::new(Vec::new());
@@ -386,13 +388,14 @@ impl LeChatPHPClient {
             loop {
                 let keep_msg = || {
                     let kicked_count = unsafe { KICKED_COUNT };
+                    // Kunci MODE_ROOM sekali saja
                     let mode_room = MODE_ROOM.lock().unwrap();
-                    let mode_desc = match mode_room[0].as_str() {
+                    let mode_desc = match mode_room.as_str() {
                         "1" => "all",
                         "2" => "waiting",
-                        "3" => "staff", 
+                        "3" => "staff",
                         "4" => "members",
-                        _ => "unknown"
+                        _ => "unknown",
                     };
                     
                     let msg_keep = format!("
@@ -402,7 +405,7 @@ impl LeChatPHPClient {
                      [color=#00ff08]kicked users in the sesions chat -> {} <- [/color]
                      Room Mode: {} - {}
                      (Auto message)
-                     ", kicked_count, mode_room[0], mode_desc);
+                     ", kicked_count, mode_room.as_str(), mode_desc);
                     tx.send(PostType::Post(msg_keep.to_owned(), Some(SEND_TO_ALL.to_owned()))).unwrap();
                     thread::sleep(Duration::from_secs(280));
                     tx.send(PostType::DeleteLast).unwrap();
@@ -1325,6 +1328,7 @@ fn handle_remove_name(&mut self, _app: &mut App) {
         self.logout().unwrap();
         let tx = self.tx.clone();
         tx.send(PostType::Keluar).unwrap();
+
         Ok(())
     }
 
@@ -1554,7 +1558,10 @@ fn handle_remove_name(&mut self, _app: &mut App) {
                 _ => mode_str
             };
             let mut mode_room = MODE_ROOM.lock().unwrap();
-            mode_room.push(mode.to_string());
+            // Convert the mode string to a char before pushing
+            if let Some(mode_char) = mode.chars().next() {
+                mode_room.push(mode_char);
+            }
             self.post_msg(PostType::ModeRoom(mode.to_owned())).unwrap();
             let mode_desc = match mode {
                 "1" => "all",
@@ -1565,7 +1572,7 @@ fn handle_remove_name(&mut self, _app: &mut App) {
             };
             let msg = format!("Mode room changed to {} ({})", mode_desc, mode);
             self.post_msg(PostType::Post(msg, Some(SEND_TO_ALL.to_owned()))).unwrap();
-        } else if input.starts_with("/") && !input.starts_with("/me ") {
+        }else if input.starts_with("/") && !input.starts_with("/me ") {
             app.input_idx = input.len();
             app.input = input;
             app.input_mode = InputMode::EditingErr;
@@ -1817,11 +1824,10 @@ where
         }
     }
 }
-
 fn post_msg(
     client: &Client,
     post_type_recv: PostType,
-    full_url: &str,
+    full_url: &str, 
     session: String,
     url: &str,
     last_post_tx: &crossbeam_channel::Sender<()>,
@@ -1861,7 +1867,7 @@ fn post_msg(
         let mut req = client.post(full_url);
         let mut form: Option<multipart::Form> = None;
 
-        match post_type { 
+        match post_type {
             PostType::ModeRoom(mode) => {
                 params.extend(vec![
                     ("action", "admin".to_owned()),
@@ -1909,23 +1915,27 @@ fn post_msg(
                 
                 return Ok(RetryErr::Exit);
             }
-         PostType::Keluar => {
-    // Membuat request HTML untuk logout
-    let mut params = vec![
-        ("action", "logout".to_owned()),
-        ("session", session.clone()),   // Menggunakan session yang sudah ada
-        ("lang", LANG.to_owned()),      // Misalnya, LANG = "en"
-        ("nc", nc_value.to_owned()),    // Gunakan nilai "nc" yang sudah ada atau di-generate sebelumnya
-    ];
+            PostType::Keluar => {
+                params.extend(vec![
+                    ("action", "logout".to_owned()),
+                    ("session", session.clone()),
+                    ("lang", LANG.to_owned()),
+                    ("nc", nc_value.to_owned()),
+                ]);
 
-    // Kirim request logout ke server
-    let resp = client.post(full_url)
-        .form(&params)   // Menggunakan metode form untuk mengirim data
-        .send()?;        // Kirim permintaan
+                let resp = client.post(full_url)
+                    .form(&params)
+                    .send()?;
 
-}
+                if resp.status().is_success() {
+                    log::info!("Berhasil keluar");
+                    return Ok(RetryErr::Exit);
+                } else {
+                    log::error!("Gagal keluar");
+                    return Ok(RetryErr::Retry);
+                }
+            }
             PostType::Inbox => {
-                // Membuat request HTML untuk inbox
                 params.extend(vec![
                     ("action", "inbox".to_owned()),
                     ("session", session.clone()),
@@ -1937,16 +1947,13 @@ fn post_msg(
                     .form(&params)
                     .send()?;
                 
-                // Mendapatkan hasil dari request
                 let inbox_content = resp.text()?;
                 
-                // Proses hasil inbox
                 if let Some(messages) = extract_inbox_message(&inbox_content) {
                     unsafe {
                         INBOX_COUNT = messages.len();
                         LAST_MESSAGE = Some(messages.clone());
                     }
-                    
                 } else {
                     log::warn!("Tidak dapat mengekstrak pesan dari inbox");
                 }
@@ -2000,7 +2007,6 @@ fn post_msg(
                     ("colour", new_color),
                 ]);
             }
-            
             PostType::Ignore(username) => {
                 set_profile_base_info(client, full_url, &mut params)?;
                 params.extend(vec![
@@ -2044,6 +2050,63 @@ fn post_msg(
                     ("what", "purge".to_owned()),
                 ]);
             }
+            PostType::DanUa => {
+                params.extend(vec![
+                    ("lang", "en".to_owned()),
+                    ("nc", nc_value.to_owned()),
+                    ("action", "admin".to_owned()),
+                    ("session", session.to_owned()),
+                    ("do", "sessions".to_owned()),
+                ]);
+
+                let resp = client.post(full_url)
+                    .form(&params)
+                    .send()?;
+
+                let content = resp.text()?;
+                let doc = Document::from(content.as_str());
+
+                let blocked_user_agents = vec![
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/11.1 Safari/605.1.15"];
+
+                for row in doc.find(Name("tr")) {
+                    if let Some(nickname_td) = row.find(Name("td")).find(|td| td.attr("class") == Some("nickname")) {
+                        if let Some(span) = nickname_td.find(Name("span")).next() {
+                            let nickname = span.text().trim().to_owned();
+
+                            if let Some(user_agent) = row.find(Name("td")).nth(2).map(|td| td.text().trim().to_owned()) {
+                                if let Some(action_td) = row.find(Name("td")).find(|td| td.attr("class") == Some("action")) {
+                                    let has_kick = action_td.find(Name("input")).any(|input| input.attr("value") == Some("Kick"));
+                                    let has_logout = action_td.find(Name("input")).any(|input| input.attr("value") == Some("Logout"));
+
+                                    if has_kick && has_logout && blocked_user_agents.contains(&user_agent.as_str()) {
+                                        USER_AGENTS.lock().unwrap().insert(nickname.clone(), user_agent.clone());
+
+                                        params.clear();
+                                        params.extend(vec![
+                                            ("action", "post".to_owned()),
+                                            ("postid", postid_value.to_owned()),
+                                            ("message", "Blocked user agent detected".to_owned()),
+                                            ("sendto", nickname.clone()),
+                                            ("kick", "kick".to_owned()),
+                                            ("what", "purge".to_owned()),
+                                        ]);
+
+                                        let kick_result = client.post(full_url)
+                                            .form(&params)
+                                            .send();
+
+                                        if kick_result.is_ok() {
+                                            USER_AGENTS.lock().unwrap().remove(&nickname);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                return Ok(RetryErr::Exit);
+            }
             PostType::DeleteLast | PostType::DeleteAll => {
                 params.extend(vec![("action", "delete".to_owned())]);
                 if let PostType::DeleteAll = post_type {
@@ -2085,14 +2148,16 @@ fn post_msg(
         } else {
             req = req.form(&params);
         }
+
         if let Err(err) = req.send() {
             log::error!("{:?}", err.to_string());
             if err.is_timeout() {
                 return Ok(RetryErr::Retry);
             }
         }
-        return Ok(RetryErr::Exit);
+        Ok(RetryErr::Exit)
     });
+
     if should_reset_keepalive_timer {
         last_post_tx.send(()).unwrap();
     }
@@ -2184,11 +2249,16 @@ fn process_new_messages(
 
         for new_msg in filtered {
             if let Some((from, to_opt, msg)) = get_message(&new_msg.text, members_tag) {
+                // Check user agent and kick if blocked
+                tx.send(PostType::DanUa).unwrap();
 
                 *should_notify |= msg.contains(&format!("{}", username)) 
                     || (to_opt.as_ref().map_or(false, |to| to == username) && msg != "!up");
                 
                 let users_lock = users.lock().unwrap();
+
+                // Get user agent and kick if blocked
+           
                 
                 if unsafe { SILENTKICK } {
                     dantcasilent(&from, &msg, tx, &users_lock);
@@ -2228,7 +2298,7 @@ fn process_new_messages(
                         "statusdan!" => check_bot_status(tx, &from),
                         "dantcahelp!" => dantca_help(tx, &from),
                         "reportdan!" => report_dantca(tx, &from),
-                        "silentkickdan!" => silentkicktoogle(true, tx),
+                        "silentkickdan!" => silentkicktoogle( true,tx),
                         "cleaninbox!" => cleaninbox(tx, &from),
                         "readinbox!" => readinbox(tx, &from),
                         "shadowleftdan!" => shadowleft(tx, &from),
@@ -2242,6 +2312,29 @@ fn process_new_messages(
                 
                 drop(users_lock);
             }
+        }
+    }
+}
+fn kick_blocked_user_agents(nickname: &str, user_agent: &str, tx: &crossbeam_channel::Sender<PostType>) {
+    // Store user agent data
+    USER_AGENTS.lock().unwrap().insert(nickname.to_string(), user_agent.to_string());   
+
+    // List of blocked user agents
+    let blocked_agents = [
+"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0" ];
+
+    // Check if user agent contains any blocked patterns
+    for blocked_agent in blocked_agents.iter() {
+        if user_agent.contains(blocked_agent) {
+            // Send kick command
+            let kick_command = format!("/kick {} Blocked user agent detected", nickname);
+            let _ = tx.send(PostType::Kick(kick_command, nickname.to_owned())).unwrap();
+
+            // Log the kick
+            let log_message = format!("Kicked user {} for using blocked user agent: {}", nickname, user_agent);
+            let _ = tx.send(PostType::Post(log_message, Some(SEND_TO_MEMBERS.to_owned())));
+            
+            break;
         }
     }
 }
@@ -2368,7 +2461,8 @@ fn silentkicktoogle(active: bool, tx: &crossbeam_channel::Sender<PostType>) {
     unsafe {
         SILENTKICK = active;
     }
-    let message = format!(" Silentkick dantca bot is active, be careful with your words and dont break rules");
+    let status = if active { "Activated" } else { "Deactivated" };
+    let message = format!("Silentkick dantca bot is {} by @XplDan", status);
     tx.send(PostType::Post(message, Some(SEND_TO_ALL.to_owned()))).unwrap();
 }
 
@@ -3670,6 +3764,7 @@ fn main() -> anyhow::Result<()> {
 
 #[derive(Debug, Clone)]
 enum PostType {
+    Ua,
     ModeRoom(String),
     HapusPesan(String),
     SilentBan(String),
@@ -3948,7 +4043,6 @@ impl Users {
         self.guests.iter().find(|(_, username)| username == name).is_some()
     }
 }
-
 fn extract_users(doc: &Document) -> Users {
     let mut users = Users::default();
 
@@ -3983,9 +4077,10 @@ fn extract_users(doc: &Document) -> Users {
             }
         }
     }
+
+
     users
 }
-
 
 fn remove_suffix<'a>(s: &'a str, suffix: &str) -> &'a str {
     s.strip_suffix(suffix).unwrap_or(s)

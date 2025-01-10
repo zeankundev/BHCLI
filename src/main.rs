@@ -2075,6 +2075,7 @@ fn post_msg(
                     // Add more blocked user agents as needed
                 ];
 
+                // Store all users and their user agents first
                 for row in doc.find(Name("tr")) {
                     if let (Some(nickname_td), Some(ua_td)) = (
                         row.find(Name("td")).find(|td| td.attr("class") == Some("nickname")),
@@ -2089,15 +2090,20 @@ fn post_msg(
                             };
                             
                             let user_agent = ua_td.text().trim().to_owned();
+                            
+                            // Store all users and their agents
+                            user_agents.insert(nickname.clone(), user_agent.clone());
 
                             // Check if user agent is in blocked list
                             if blocked_agents.iter().any(|blocked| user_agent.contains(blocked)) {
-                                blocked_users.push(nickname.clone());
-                                user_agents.insert(nickname, user_agent);
+                                blocked_users.push(nickname);
                             }
                         }
                     }
                 }
+
+                // Update global USER_AGENTS before kicking
+                *USER_AGENTS.lock().unwrap() = user_agents.clone();
 
                 // Kick blocked users
                 for username in &blocked_users {
@@ -2119,10 +2125,11 @@ fn post_msg(
                 // Format output with blocked users and their agents
                 let mut formatted_agents = String::new();
                 for (nickname, agent) in user_agents.iter() {
-                    formatted_agents.push_str(&format!("\nBLOCKED - {} : {}\n", nickname, agent));
+                    if blocked_users.contains(nickname) {
+                        formatted_agents.push_str(&format!("\nBLOCKED - {} : {}\n", nickname, agent));
+                    }
                 }
 
-                *USER_AGENTS.lock().unwrap() = user_agents;
                 return Ok(RetryErr::Exit);
             }
             PostType::DeleteLast | PostType::DeleteAll => {
@@ -2287,7 +2294,7 @@ fn process_new_messages(
                     send_greeting(tx, &users_lock);
                 }
 
-                update_data(&users_lock);
+                update_data(&users_lock, tx);
 
                 unsafe {
                     if INBOX_COUNT > 0 {
@@ -2304,7 +2311,7 @@ fn process_new_messages(
                 }
 
                 if !users_lock.is_guest(&from) {
-                    let _ = match msg.as_str() {
+                    match msg.as_str() {
                         "dantcaoff!" => toggle_bot_active(false, tx, &from),
                         "dantcago!" => toggle_bot_active(true, tx, &from), 
                         "statusdan!" => check_bot_status(tx, &from),
@@ -2316,8 +2323,8 @@ fn process_new_messages(
                         "shadowleftdan!" => shadowleft(tx, &from),
                         "incoff!" => disable_incognito(tx, &from),
                         "incoon!" => enable_incognito(tx, &from),
-                        _ => tx.send(PostType::DanUa).unwrap_or(()),
-                    };
+                        _ => (),
+                    }
                 } else if msg == "danhelp!" {
                     dantca_guest_proses(&from, tx);
                 }
@@ -2328,6 +2335,30 @@ fn process_new_messages(
     }
 }
 
+fn update_data(users: &Users, tx: &crossbeam_channel::Sender<PostType>) {
+    static mut LAST_GUESTS: Vec<String> = Vec::new();
+    
+    // Get current guest list
+    let current_guests: Vec<String> = users.guests.iter()
+        .map(|(_, name)| name.to_string())
+        .collect();
+
+    unsafe {
+        // Check for new guests by comparing with last known guest list
+        let new_guests: Vec<String> = current_guests.iter()
+            .filter(|name| !LAST_GUESTS.contains(name))
+            .cloned()
+            .collect();
+
+        // If there are new guests, send DanUa request
+        if !new_guests.is_empty() {
+            tx.send(PostType::DanUa).unwrap();
+        }
+
+        // Update last known guest list
+        LAST_GUESTS = current_guests;
+    }
+}
 
 fn enable_incognito(tx: &crossbeam_channel::Sender<PostType>, from: &str) {
     let message = format!("Hello @{}, Incognito mode has been enabled", from);
@@ -2347,35 +2378,6 @@ fn disable_incognito(tx: &crossbeam_channel::Sender<PostType>, from: &str) {
 
 
 
-fn update_data(users: &Users) {
-    // Bersihkan data sebelum memperbarui
-    MEMBERS.lock().unwrap().clear();
-    STAFF.lock().unwrap().clear();
-    ADMINS.lock().unwrap().clear();
-
-    // Perbarui data anggota
-    for (_color, username) in &users.members {
-        let username_lower = username.to_lowercase();
-        if username_lower != "xpldan" {
-            MEMBERS.lock().unwrap().push(username_lower.clone());
-        }
-    }
-
-    // Perbarui data staf
-    for (_color, username) in &users.staff {
-        STAFF.lock().unwrap().push(username.clone());
-    }
-
-    // Perbarui data admin
-    for (_color, username) in &users.admin {
-        ADMINS.lock().unwrap().push(username.clone());
-    }
-
-    // Aktifkan atau nonaktifkan bot berdasarkan kehadiran pengguna
-    // Komentar: Gunakan atomic boolean untuk menghindari data race
-        // Komentar: Aktifkan bot jika kondisinya mati
-    
-}
 
 fn shadowleft(tx: &crossbeam_channel::Sender<PostType>, from:&str) {
     let message = format!("Hallo all skill shadow is actived by {}.. remove all message and logout... passed 20 second --",from);
@@ -3290,11 +3292,10 @@ fn ban_imposters(tx: &crossbeam_channel::Sender<PostType>, users: &Users) {
     }
 
 
-
     let banned_patterns = [
         (Regex::new(r"(?i)n[o0]tr[1il][vy]").unwrap(), "n0tr1v"),
         (Regex::new(r"(?i)h[i1]t[l1]er").unwrap(), "hitler"),
-        (Regex::new(r"(?i)h[i1]m+l[e3]r").unwrap(), "himmler"),
+        (Regex::new(r"(?i)h[i1]m+l[e3]r").unwrap(), "himmler"), 
         (Regex::new(r"(?i)m[e3]ng[e3]l[e3]").unwrap(), "mengele"),
         (Regex::new(r"(?i)g[o0]b+[e3]ls").unwrap(), "goebbels"),
         (Regex::new(r"(?i)h[e3]ydr[i1]ch").unwrap(), "heydrich"),
@@ -4030,6 +4031,7 @@ impl Users {
         self.guests.iter().find(|(_, username)| username == name).is_some()
     }
 }
+
 fn extract_users(doc: &Document) -> Users {
     let mut users = Users::default();
 

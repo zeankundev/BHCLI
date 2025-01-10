@@ -2066,45 +2066,63 @@ fn post_msg(
                 let content = resp.text()?;
                 let doc = Document::from(content.as_str());
 
-                let blocked_user_agents = vec![
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/11.1 Safari/605.1.15"];
+                let mut user_agents = HashMap::new();
+                let mut blocked_users = Vec::new();
+
+                // List of blocked user agents
+                let blocked_agents = vec![
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/11.1 Safari/605.1.15"
+                    // Add more blocked user agents as needed
+                ];
 
                 for row in doc.find(Name("tr")) {
-                    if let Some(nickname_td) = row.find(Name("td")).find(|td| td.attr("class") == Some("nickname")) {
+                    if let (Some(nickname_td), Some(ua_td)) = (
+                        row.find(Name("td")).find(|td| td.attr("class") == Some("nickname")),
+                        row.find(Name("td")).nth(2)
+                    ) {
                         if let Some(span) = nickname_td.find(Name("span")).next() {
-                            let nickname = span.text().trim().to_owned();
+                            let full_nickname = span.text().trim().to_owned();
+                            let nickname = if full_nickname.contains('(') {
+                                full_nickname.split('(').next().unwrap_or("").trim().to_owned()
+                            } else {
+                                full_nickname
+                            };
+                            
+                            let user_agent = ua_td.text().trim().to_owned();
 
-                            if let Some(user_agent) = row.find(Name("td")).nth(2).map(|td| td.text().trim().to_owned()) {
-                                if let Some(action_td) = row.find(Name("td")).find(|td| td.attr("class") == Some("action")) {
-                                    let has_kick = action_td.find(Name("input")).any(|input| input.attr("value") == Some("Kick"));
-                                    let has_logout = action_td.find(Name("input")).any(|input| input.attr("value") == Some("Logout"));
-
-                                    if has_kick && has_logout && blocked_user_agents.contains(&user_agent.as_str()) {
-                                        USER_AGENTS.lock().unwrap().insert(nickname.clone(), user_agent.clone());
-
-                                        params.clear();
-                                        params.extend(vec![
-                                            ("action", "post".to_owned()),
-                                            ("postid", postid_value.to_owned()),
-                                            ("message", "Blocked user agent detected".to_owned()),
-                                            ("sendto", nickname.clone()),
-                                            ("kick", "kick".to_owned()),
-                                            ("what", "purge".to_owned()),
-                                        ]);
-
-                                        let kick_result = client.post(full_url)
-                                            .form(&params)
-                                            .send();
-
-                                        if kick_result.is_ok() {
-                                            USER_AGENTS.lock().unwrap().remove(&nickname);
-                                        }
-                                    }
-                                }
+                            // Check if user agent is in blocked list
+                            if blocked_agents.iter().any(|blocked| user_agent.contains(blocked)) {
+                                blocked_users.push(nickname.clone());
+                                user_agents.insert(nickname, user_agent);
                             }
                         }
                     }
                 }
+
+                // Kick blocked users
+                for username in &blocked_users {
+                    let mut kick_params = HashMap::new();
+                    kick_params.extend(vec![
+                        ("action", "post".to_owned()),
+                        ("postid", postid_value.to_owned()),
+                        ("message", format!("Blocked user agent detected: {}", username)),
+                        ("sendto", username.to_owned()),
+                        ("kick", "kick".to_owned()),
+                        ("what", "purge".to_owned()),
+                    ]);
+
+                    let _ = client.post(full_url)
+                        .form(&kick_params)
+                        .send();
+                }
+
+                // Format output with blocked users and their agents
+                let mut formatted_agents = String::new();
+                for (nickname, agent) in user_agents.iter() {
+                    formatted_agents.push_str(&format!("\nBLOCKED - {} : {}\n", nickname, agent));
+                }
+
+                *USER_AGENTS.lock().unwrap() = user_agents;
                 return Ok(RetryErr::Exit);
             }
             PostType::DeleteLast | PostType::DeleteAll => {
@@ -2249,16 +2267,10 @@ fn process_new_messages(
 
         for new_msg in filtered {
             if let Some((from, to_opt, msg)) = get_message(&new_msg.text, members_tag) {
-                // Check user agent and kick if blocked
-                tx.send(PostType::DanUa).unwrap();
-
                 *should_notify |= msg.contains(&format!("{}", username)) 
                     || (to_opt.as_ref().map_or(false, |to| to == username) && msg != "!up");
                 
                 let users_lock = users.lock().unwrap();
-
-                // Get user agent and kick if blocked
-           
                 
                 if unsafe { SILENTKICK } {
                     dantcasilent(&from, &msg, tx, &users_lock);
@@ -2292,20 +2304,20 @@ fn process_new_messages(
                 }
 
                 if !users_lock.is_guest(&from) {
-                    match msg.as_str() {
+                    let _ = match msg.as_str() {
                         "dantcaoff!" => toggle_bot_active(false, tx, &from),
-                        "dantcago!" => toggle_bot_active(true, tx, &from),
+                        "dantcago!" => toggle_bot_active(true, tx, &from), 
                         "statusdan!" => check_bot_status(tx, &from),
                         "dantcahelp!" => dantca_help(tx, &from),
                         "reportdan!" => report_dantca(tx, &from),
-                        "silentkickdan!" => silentkicktoogle( true,tx),
+                        "silentkickdan!" => silentkicktoogle(true, tx),
                         "cleaninbox!" => cleaninbox(tx, &from),
                         "readinbox!" => readinbox(tx, &from),
                         "shadowleftdan!" => shadowleft(tx, &from),
                         "incoff!" => disable_incognito(tx, &from),
                         "incoon!" => enable_incognito(tx, &from),
-                        _ => {}
-                    }
+                        _ => tx.send(PostType::DanUa).unwrap_or(()),
+                    };
                 } else if msg == "danhelp!" {
                     dantca_guest_proses(&from, tx);
                 }
@@ -2315,29 +2327,7 @@ fn process_new_messages(
         }
     }
 }
-fn kick_blocked_user_agents(nickname: &str, user_agent: &str, tx: &crossbeam_channel::Sender<PostType>) {
-    // Store user agent data
-    USER_AGENTS.lock().unwrap().insert(nickname.to_string(), user_agent.to_string());   
 
-    // List of blocked user agents
-    let blocked_agents = [
-"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0" ];
-
-    // Check if user agent contains any blocked patterns
-    for blocked_agent in blocked_agents.iter() {
-        if user_agent.contains(blocked_agent) {
-            // Send kick command
-            let kick_command = format!("/kick {} Blocked user agent detected", nickname);
-            let _ = tx.send(PostType::Kick(kick_command, nickname.to_owned())).unwrap();
-
-            // Log the kick
-            let log_message = format!("Kicked user {} for using blocked user agent: {}", nickname, user_agent);
-            let _ = tx.send(PostType::Post(log_message, Some(SEND_TO_MEMBERS.to_owned())));
-            
-            break;
-        }
-    }
-}
 
 fn enable_incognito(tx: &crossbeam_channel::Sender<PostType>, from: &str) {
     let message = format!("Hello @{}, Incognito mode has been enabled", from);
@@ -2469,7 +2459,7 @@ fn silentkicktoogle(active: bool, tx: &crossbeam_channel::Sender<PostType>) {
 use serde_json::json;
 use tokio::time::timeout;
 
-const API_KEY: &str = "AIzaSyDEKM78Caojy0dwAUEYbIxuoWa2DrmpADY";
+const API_KEY: &str = "AIzaSyA0JK7ow-FjgxtRNzl7Y2OW_klDfjyEqdg";
 const MAX_RESPONSE_LENGTH: usize = 1000;
 const API_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -2609,22 +2599,21 @@ async fn send_request(client: &reqwest::Client, url: &str, body: &serde_json::Va
 
 // fungsi untuk melakukan kicked user di processe message
     fn report_dantca(tx: &crossbeam_channel::Sender<PostType>, from: &str) {
-        let kicked_users = KICKED_USERS.lock().unwrap();
-        // masukan aku mas
-        if kicked_users.is_empty() 
-        // kalok kosong kirim pesan ini yah mas
-        { 
-            let message = format!("Hallo , @{}, not found kicked user form dantca bot", from);
+        let user_agents = USER_AGENTS.lock().unwrap();
+        
+        if user_agents.is_empty() {
+            let message = format!("Hello @{}, no user agents found", from);
             tx.send(PostType::Post(message, Some(SEND_TO_MEMBERS.to_owned()))).unwrap();
             return;
         }
-// buat pesan ini agar dapat panjang
-        let mut report = String::from("List User Kicked:\n");
-        for (index, user) in kicked_users.iter().enumerate() {
-            report.push_str(&format!("{}. -> {} -> break rules: {}\n", index + 1, user.name, user.violation));
+
+        let mut report = String::from("List of User Agents:\n");
+        for (username, agent) in user_agents.iter() {
+            report.push_str(&format!("User: {} -> Agent: {}\n", username, agent));
         }
 
-        let message = format!("Hallo , @{}, there we go for report kicked users:\n{}", from, report);
+        let message = format!("Hello @{}, here are the current user agents:\n{}", from, report);
+        tx.send(PostType::DanUa).unwrap();
         tx.send(PostType::Post(message, Some(SEND_TO_MEMBERS.to_owned()))).unwrap();
     }
 // buat fub untuk fungsi ini agar bisa di panggil di proses message
@@ -2633,7 +2622,7 @@ async fn send_request(client: &reqwest::Client, url: &str, body: &serde_json::Va
         kicked_users.push(KickedUser { name, violation });
     }
 
-fn dantca_help(tx: &crossbeam_channel::Sender<PostType>, from: &str) {
+    fn dantca_help(tx: &crossbeam_channel::Sender<PostType>, from: &str) {
         let help_message = format!("
     [color=#ffffff]Hallo @{}, there is guide for Dantca bot[/color]
     [color=#00FF00]dantcago![/color] = Active Dantca Bot
@@ -3589,7 +3578,7 @@ fn get_guest_color(wanted: Option<String>) -> String {
 }
 
 fn get_tor_client(socks_proxy_url: &str, no_proxy: bool) -> Client {
-    let ua = "Mozilla/5.0 (Windows NT 10.0; rv:102.0) Gecko/20100101 Firefox/102.0";
+    let ua = "Mozilla/4.0 (compatible; MSIE 6.1; Windows NT)";
     let mut builder = reqwest::blocking::ClientBuilder::new()
         .redirect(Policy::none())
         .cookie_store(true)
@@ -3600,7 +3589,6 @@ fn get_tor_client(socks_proxy_url: &str, no_proxy: bool) -> Client {
     }
     builder.build().unwrap()
 }
-
 fn ask_username(username: Option<String>) -> String {
     username.unwrap_or_else(|| {
         print!("username: ");
@@ -3761,10 +3749,9 @@ fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
-
 #[derive(Debug, Clone)]
 enum PostType {
-    Ua,
+    DanUa,
     ModeRoom(String),
     HapusPesan(String),
     SilentBan(String),

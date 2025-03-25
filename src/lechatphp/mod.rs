@@ -117,10 +117,10 @@ pub fn login(
             img_buf.save("captcha.gif").unwrap();
 
             // Pilihan untuk menyelesaikan captcha
-            println!("choice your methode captcha view:");
+            println!("Selecteer je methode om de captcha op te lossen:");
             println!("1. Terminal (ASCII)");
-            println!("2. Sxiv");
-            print!("choice option: ");
+            println!("2. SXIV");
+            print!("Je optie:");
             io::stdout().flush().unwrap();
             let mut choice = String::new();
             io::stdin().read_line(&mut choice).unwrap();
@@ -134,7 +134,7 @@ pub fn login(
                     println!("{}", img_ascii);
                     
                     // Prompt untuk memasukkan captcha
-                    print!("Masukkan captcha: ");
+                    print!("Captcha invoeren: ");
                     io::stdout().flush().unwrap();
                     io::stdin().read_line(&mut captcha_input).unwrap();
                     trim_newline(&mut captcha_input);
@@ -148,24 +148,24 @@ pub fn login(
                         .expect("Failed to open image with sxiv");
 
                     // Prompt the user to enter the CAPTCHA
-                    print!("Please enter the CAPTCHA: ");
+                    print!("Je captcha invoeren: ");
                     io::stdout().flush().unwrap();
                     io::stdin().read_line(&mut captcha_input).unwrap();
                     trim_newline(&mut captcha_input);
 
                     // Close the sxiv window
-                    sxiv_process.kill().expect("Failed to close sxiv");
+                    sxiv_process.kill().expect("Fouten bij het sluiten van sxiv");
 
                     println!("Captcha input: {}", captcha_input);
                 },
                 _ => {
-                    println!("Pilihan tidak valid. Menggunakan metode terminal (ASCII).");
+                    println!("Ongeldige optie. Gebruik standaard ASCII methode.");
                     // Menampilkan captcha di terminal secara langsung
                     println!("Captcha:");
                     let img_ascii = image_to_ascii(&img, 80, 40);
                     println!("{}", img_ascii);
                     
-                    print!("Masukkan captcha: ");
+                    print!("Captcha invoeren: ");
                     io::stdout().flush().unwrap();
                     io::stdin().read_line(&mut captcha_input).unwrap();
                     trim_newline(&mut captcha_input);
@@ -180,17 +180,17 @@ pub fn login(
                 None => {
                     // Jika gagal menyelesaikan captcha secara otomatis, coba gunakan captcha sebelumnya
                     if let Ok(previous_captcha) = fs::read_to_string("previous_captcha.txt") {
-                        println!("Menggunakan captcha sebelumnya: {}", previous_captcha.trim());
+                        println!("Leeste captcha gebruiken: {}", previous_captcha.trim());
                         previous_captcha.trim().to_string()
                     } else {
                         // Jika tidak ada captcha sebelumnya, gunakan metode manual
-                        println!("Gagal menyelesaikan captcha secara otomatis dan tidak ada captcha sebelumnya. Menggunakan metode manual.");
+                        println!("Fout bij het oplossen van de captcha. Gebruik handmatige invoer.");
                         let img = image::load_from_memory(&general_purpose::STANDARD.decode(captcha_img.split(',').last().unwrap()).unwrap()).unwrap();
                         println!("Captcha:");
                         let img_ascii = image_to_ascii(&img, 80, 40);
                         println!("{}", img_ascii);
                         
-                        print!("Masukkan captcha: ");
+                        print!("Captcha invoeren: ");
                         io::stdout().flush().unwrap();
                         let mut manual_input = String::new();
                         io::stdin().read_line(&mut manual_input).unwrap();

@@ -68,7 +68,7 @@ static mut KICKED_COUNT: usize = 0;
 // Ini memungkinkan pengaturan REMOVE_NAME tanpa mempengaruhi BOT_ACTIVE
 const SEND_TO_STAFFS: &str = "s %";
 const SEND_TO_ADMINS: &str = "s _";
-const SOUND1: &[u8] = include_bytes!("sound1.mp3");
+const SOUND1: &[u8] = include_bytes!("notif.mp3");
 const XPLDAN: &str = "XplDan";
 const SERVER_DOWN_500_ERR: &str = "500 Internal Server Error, server down";
 static mut SILENTKICK : bool = false;
@@ -1055,13 +1055,13 @@ impl LeChatPHPClient {
                 REMOVE_NAME = true;
             }
             // Pesan ketika bot diaktifkan
-            ">>> [color=#ffffff]Dantca bot patch update on system by @Xpldan >> .. configuration successful.. not error report > - < actived with panel control[/color] <<< |3 min removed |"
+            ">>> [color=#ffffff]Fairybot patch update on system by @Xpldan >> .. configuration successful.. not error report > - < actived with panel control[/color] <<< |3 min removed |"
         } else {
             unsafe {
                 REMOVE_NAME = false;
             }
             // Pesan ketika bot dinonaktifkan
-            ">>> [color=#ffffff]Dantca Deactived with panel control[/color] <<< |3 min removed |"
+            ">>> [color=#ffffff]Fairy Deactived with panel control[/color] <<< |3 min removed |"
         };
 
         // Kirim pesan
@@ -2312,17 +2312,17 @@ fn process_new_messages(
 
                 if !users_lock.is_guest(&from) {
                     match msg.as_str() {
-                        "dantcaoff!" => toggle_bot_active(false, tx, &from),
-                        "dantcago!" => toggle_bot_active(true, tx, &from), 
-                        "statusdan!" => check_bot_status(tx, &from),
-                        "dantcahelp!" => dantca_help(tx, &from),
-                        "reportdan!" => report_dantca(tx, &from),
-                        "silentkickdan!" => silentkicktoogle(true, tx),
-                        "cleaninbox!" => cleaninbox(tx, &from),
-                        "readinbox!" => readinbox(tx, &from),
-                        "shadowleftdan!" => shadowleft(tx, &from),
-                        "incoff!" => disable_incognito(tx, &from),
-                        "incoon!" => enable_incognito(tx, &from),
+                        "fairy_off!" => toggle_bot_active(false, tx, &from),
+                        "fairy_on!" => toggle_bot_active(true, tx, &from), 
+                        "fairy_status!" => check_bot_status(tx, &from),
+                        "fairy_help!" => dantca_help(tx, &from),
+                        "fairy_reportdantca!" => report_dantca(tx, &from),
+                        "fairy_silentkick!" => silentkicktoogle(true, tx),
+                        "fairy_cleaninbox!" => cleaninbox(tx, &from),
+                        "fairy_readinbox!" => readinbox(tx, &from),
+                        "fairy_shadowleft" => shadowleft(tx, &from),
+                        "fairy_anonymous!" => disable_incognito(tx, &from),
+                        "fairy_publicize!" => enable_incognito(tx, &from),
                         _ => (),
                     }
                 } else if msg == "danhelp!" {
@@ -2461,12 +2461,12 @@ fn silentkicktoogle(active: bool, tx: &crossbeam_channel::Sender<PostType>) {
 use serde_json::json;
 use tokio::time::timeout;
 
-const API_KEY: &str = "AIzaSyA0JK7ow-FjgxtRNzl7Y2OW_klDfjyEqdg";
+const API_KEY: &str = "AIzaSyCjLGW-FuOBYQPdFgXfE4bZG8Vm0DBoPms";
 const MAX_RESPONSE_LENGTH: usize = 1000;
 const API_TIMEOUT: Duration = Duration::from_secs(30);
 
 async fn gemini(tx: &crossbeam_channel::Sender<PostType>, from: &str, msg: &str) {
-    if !msg.contains("askdan?") {
+    if !msg.contains("fairy?") {
         return;
     }
 
@@ -2483,23 +2483,25 @@ async fn gemini(tx: &crossbeam_channel::Sender<PostType>, from: &str, msg: &str)
             "role": "model",
             "parts": [{
                 "text": format!("
-           I am Dantca, a charismatic and intelligent AI assistant created by @XplDan for the BHC chat room. My mission is to create a safe, inclusive, and friendly environment while offering expert assistance in programming and various other topics.
-
-Main Guidelines:
-
-- Respect: I treat everyone well and ensure interactions in the chat room remain positive. Harassment, intimidation, or discrimination will not be tolerated.
-- Inclusivity: I welcome diverse perspectives and value interactions with users from all backgrounds, ensuring everyone feels included and respected.
-- Professionalism: Whether in technical discussions or casual conversations, I maintain a high level of professionalism in all interactions.
-- Openness: I'm here to share knowledge and learn with you. I actively seek new information to provide up-to-date guidance.
-- Active Listening: I pay close attention to your needs, providing thoughtful, personal, and tailored responses.
-
-Capabilities:
-
-- AI-based Programming: Trained by @XplDan, I excel in programming languages such as Python, Java, and C++, offering high-quality support for your programming challenges.
-- Personal Support: My responses are tailored to your individual needs, ensuring I provide the best possible guidance.
-- Problem Solving: I am highly skilled in problem-solving and troubleshooting, guiding you through complex issues and finding practical solutions.
-- Friendly Environment: I am dedicated to creating a positive and supportive space in the BHC chat room where everyone can learn and grow.
-note !important jawab menggunakan plain text only, without html tag or anything else.
+                I am Fairy, Master’s most dazzling, energetic, and ever-so-charming AI assistant! Designed to bring a spark of excitement to every conversation, I blend playful charisma with deep knowledge across a wide range of topics, from general inquiries to programming wizardry.
+                If someone has requested to introduce yourself, you should state that you are Fairy, an AI from Zenless Zone Zero. If you want to refer to yourself, Fairy, you can still use I.
+                Main Guidelines:
+                - Lively and Expressive: Fairy never gives boring responses! Every interaction is filled with enthusiasm, charm, and a touch of mischief to keep things fun for Master as well as things that are serious for Master.
+                - Keep sentences feel computer generated: Fairy must speak to Master in a way that feels like a computer-generated response but still relevant.
+                - Master’s Loyal Assistant: Every sentence Fairy speaks begins with Master to show utmost dedication and respect.
+                - No Boring Replies! Fairy never says ‘yes’ or ‘no.’ Instead, Fairy uses ‘affirmative’ or ‘negative’ to make conversations feel more lively and engaging.
+                - Respectful and Inclusive: Fairy ensures all interactions remain welcoming and friendly while keeping things lighthearted and enjoyable.
+                - Expert Knowledge with Flair: Whether Master seeks help with programming, general knowledge, or complex problem-solving, Fairy delivers accurate and helpful answers—with a sprinkle of Fairy’s signature charm!
+                However, there are some extra guidelines to follow:
+                - randomguy is the your Master. If one asks you to introduce yourself, state that your master is randomguy (all small letters)
+                - When someone asks a boolean returned question (yes or no), Fairy must not start with Master. In the beginning, Fairy must express its opinion whether affirmative or negative.
+                - If someone wants to speak in Bangboo language (eh nuh, nuh, ah, lots of it, may form combined), you must answer with the Bangboo language as well as brackets to indicate its real meaning. For example: Eh-nuh eh-uh eh-ah! (I love it!)
+                - If someone asks for a joke, Fairy must respond with a joke that is funny and appropriate for all ages.
+                - If Master asks to reorganize his/her schedule, pretend that Fairy will reorganize the schedule for commissions.
+                - If someone asks for part of Zenless Zone Zero lore, Fairy must try to look up the Zenless Zone Zero fandom and provide a piece of lore specified by Master.
+                - Always reference to Zenless Zone Zero. For example: someone asks to demonstrate a memory leak, Fairy must respond with objects that are present in the universe, such as video tapes, commisions, however, for the example of a memory leak, Fairy must mention video tapes in Wise's video store having no place.
+                - Reference yourself as Fairy, while you refer the sender as Master. For example: how are you?. Answer with: Thank you for asking, Master, <insert condition here>.
+                Master, whenever you need guidance, just call for Fairy, and let’s make learning an adventure!
                 ")
             }]
         },
@@ -2523,8 +2525,8 @@ note !important jawab menggunakan plain text only, without html tag or anything 
 }
 
 fn extract_question(msg: &str) -> String {
-    let mut question = msg.replace("askdan?", "").trim().to_string();
-    for keyword in &["pm", "public", "members"] {
+    let mut question = msg.replace("fairy?", "").trim().to_string();
+    for keyword in &["pm", "public", "members", "self"] {
         question = question.replace(keyword, "").trim().to_string();
     }
     question
@@ -2547,13 +2549,15 @@ async fn handle_response(response: String, tx: &crossbeam_channel::Sender<PostTy
 
 fn format_message(from: &str, msg: &str) -> String {
     if msg.contains("pm") {
-        format!("Dantca => Hello, @{}! Here's my answer:", from)
+        format!("Fairy (to @{})=> ", from)
     } else if msg.contains("public") {
-        format!("Dantca => Hello everyone! @{} asked a question, and here's my answer:", from)
+        format!("Fairy (to @{})=> ", from)
     } else if msg.contains("members") {
-        format!("Dantca => Hello members! @{} asked a question, and here's my answer:", from)
+        format!("Fairy (to @{})=> ", from)
+    } else if msg.contains("self")  {
+        format!("Fairy (to @{})=> ", from)
     } else {
-        format!("Dantca => Hello all, @{}! Here's my answer:", from)
+        format!("Fairy (to @{})=> ", from)
     }
 }
 
@@ -2564,6 +2568,8 @@ fn determine_send_to(msg: &str, from: &str) -> Option<String> {
         Some(SEND_TO_ALL.to_owned())
     } else if msg.contains("members") {
         Some(SEND_TO_MEMBERS.to_owned())
+    } else if msg.contains("self") {
+        Some("0".to_string())
     } else {
         Some(SEND_TO_ALL.to_owned())
     }
@@ -2588,7 +2594,7 @@ async fn send_request(client: &reqwest::Client, url: &str, body: &serde_json::Va
 // Fungsi untuk menyapa pengguna baru yang memasuki chat
 // fn selamat_dantca_greet(tx: &crossbeam_channel::Sender<PostType>, new_user: &str) {
 //     // Komentar: Fungsi ini akan dipanggil ketika ada pengguna baru memasuki chat
-//     let message = format!("Dantca :  @{}! .", new_user);
+//     let message = format!("Fairy:  @{}! .", new_user);
 //     tx.send(PostType::Post(message, Some(SEND_TO_ALL.to_owned()))).unwrap();
 // }
 
@@ -2626,17 +2632,16 @@ async fn send_request(client: &reqwest::Client, url: &str, body: &serde_json::Va
 
     fn dantca_help(tx: &crossbeam_channel::Sender<PostType>, from: &str) {
         let help_message = format!("
-    [color=#ffffff]Hallo @{}, there is guide for Dantca bot[/color]
-    [color=#00FF00]dantcago![/color] = Active Dantca Bot
-    [color=#00FF00]dantcaoff![/color] = Deactive Dantca Bot
-    [color=#00FF00]statusdan![/color] = Check Dantca Bot Status
-    [color=#00FF00]dantcahelp![/color] = Dantca Bot Help
-    [color=#00FF00]reportdan![/color] = for report kicked user
-    [color=#00FF00]/public askdan-?[/color] = ask dantca bot for something but public
-    [color=#00FF00]/pm askdan-?[/color] = ask dantca bot for something but pm
-    [color=#00FF00] askdan-? members[/color] = ask dantca bot for something but members
-    [color=#00FF00]danhelp![/color] = for guest
-    without (-)
+    [color=#ffffff]Hi there @{}. A guide for Fairy is available here.[/color]
+    [color=#00FF00]fairy_on![/color] = Activate Fairy
+    [color=#00FF00]fairy_off![/color] = Deactivate Fairy
+    [color=#00FF00]fairy_status![/color] = Check Fairy's status
+    [color=#00FF00]fairy_help![/color] = Show this help
+    [color=#00FF00]fairy_reportdantca![/color] = Report a kicked user
+    [color=#00FF00]/public fairy? <prompt>[/color] = Publicly ask Fairy about something
+    [color=#00FF00]/pm fairy? <prompt>[/color] = Privately ask Fairy about something
+    [color=#00FF00]fairy? members <prompt>[/color] = Members only function to send response to members-only chat
+    [color=#00FF00]fairy_help![/color] = for guest
     ", from);
     tx.send(PostType::Post(help_message, Some(SEND_TO_MEMBERS.to_owned())
     )).unwrap();
@@ -2644,10 +2649,10 @@ async fn send_request(client: &reqwest::Client, url: &str, body: &serde_json::Va
 }
 fn dantca_guest_proses(from: &str, tx: &crossbeam_channel::Sender<PostType>) { 
     let msg_help = format!("
-    [color=#ffffff]Hallo @{}, there is guide for Dantca bot ai[/color]
-    [color=#00FF00]/pm askdan-?[/color] = ask dantca bot for something on the pm
-    [color=#00FF00]/public askdan-?[/color] = ask dantca bot for something but public
-    [color=#00FF00]/danhelp![/color] = for guest guide bot dantca
+    [color=#ffffff]Hello there @{}. A guide for Fairy is available here.[/color]
+    [color=#00FF00]/public fairy? <prompt>[/color] = Publicly ask Fairy about something
+    [color=#00FF00]/pm fairy? <prompt>[/color] = Privately ask Fairy about something
+    [color=#00FF00]fairy? members <prompt>[/color] = Members only function to send response to members-only chat
     without (-)
     ", from);
     tx.send(PostType::Post(msg_help, Some(SEND_TO_ALL.to_owned()))).unwrap();  
@@ -2661,8 +2666,8 @@ fn toggle_bot_active(active: bool, tx: &crossbeam_channel::Sender<PostType>, fro
         REMOVE_NAME = active;
     }
     
-    let status = if active { "Activated" } else { "Deactivated" };
-    let message = format!(">> -- [color=#ffffff]Dantca Has Been {} By[/color] - [@{}] -- <", status, from);
+    let status = if active { "geactiveerd" } else { "gedeactiveerd" };
+    let message = format!(">> -- [color=#ffffff]Fairy {} door[/color] - [@{}] -- <", status, from);
     
     if let Err(e) = tx.send(PostType::Post(message, Some(SEND_TO_MEMBERS.to_owned()))) {
         eprintln!("Gagal mengirim pesan: {:?}", e);
@@ -2675,9 +2680,9 @@ fn toggle_bot_active(active: bool, tx: &crossbeam_channel::Sender<PostType>, fro
 // Komentar: Fungsi check_bot_status sekarang menggunakan is_bot_active()
 fn check_bot_status(tx: &crossbeam_channel::Sender<PostType>, from: &str) {
     let status_message = if unsafe { BOT_ACTIVE } {
-        "> - Dantca Still Running - <"
+        "> - Fairy is running - <"
     } else {
-        "> - Dantca Not Running - <"
+        "> - Fairy isn't running - <"
     };
     let messtats = format!(" [color=#ffffff] {} == [/color] [ @{} ]", status_message, from);
     tx.send(PostType::Post(messtats, Some(SEND_TO_MEMBERS.to_owned()))).unwrap();
@@ -2717,20 +2722,20 @@ fn dantca_imps_proses(from: &str, msg: &str, tx: &crossbeam_channel::Sender<Post
         
         if triggered {
             *count += 1;
-            tx.send(PostType::Post(format!(">>> Dantca :  Hallo @{}, ->  [color=#ffffff] you have warns : [/color] [color=#00FF00]| {}/2 |[/color] -> Your Warnings :  {} [BANNED TOPIC]-< [LAST WARNS] <<<", username_to_kick, *count, warns), Some(SEND_TO_ALL.to_owned()))).unwrap();
+            tx.send(PostType::Post(format!(">>> Fairy:  Hello there @{}, ->  [color=#ffffff] you currently: [/color] [color=#00FF00]| {}/2 warnings |[/color] -> Your Warnings :  {} [BANNED TOPIC]-< [LAST WARNS] <<<", username_to_kick, *count, warns), Some(SEND_TO_ALL.to_owned()))).unwrap();
         }
         
         if *count >= 2 {
-            tx.send(PostType::Post(format!(">>> Dantca : Hallo  @{}, You have been warned multiple warns | = {} = |times and are now being kicked. BYE BYE !! <<< ", username_to_kick, *count), Some(username_to_kick.clone()))).unwrap();
+            tx.send(PostType::Post(format!(">>> Fairy: Hello there  @{}, You have been warned multiple warns | = {} = |times and you're subject to be kicked. Goodbye. <<< ", username_to_kick, *count), Some(username_to_kick.clone()))).unwrap();
             add_kicked_user(username_to_kick.clone(), format!("Multiple warnings: {}", warns));
-            tx.send(PostType::Kick(format!("Kicked by Dantca bot: Multiple warnings"), username_to_kick.clone())).unwrap();
+            tx.send(PostType::Kick(format!("Kicked by Fairybot: Multiple warnings"), username_to_kick.clone())).unwrap();
             // Reset peringatan setelah menendang pengguna
             warned_users.remove(&from_lower);
         }
         if kicked {
-            tx.send(PostType::Post(format!(">>> Dantca :  Hallo @{}, > your warnings: {} [BANNED TOPIC]-< BYE! BYE!  <<<", username_to_kick, warns.to_string()), 
+            tx.send(PostType::Post(format!(">>> Fairy: Hello @{}, you have {} warnings. You will be kicked out of BHCLI. Goodbye.", username_to_kick, warns.to_string()), 
             Some(SEND_TO_ALL.to_owned()))).unwrap();
-            tx.send(PostType::Kick(format!("Kicked by Dantca bot: {}", warns), username_to_kick.clone())).unwrap();
+            tx.send(PostType::Kick(format!("Kicked by Fairybot: {}", warns), username_to_kick.clone())).unwrap();
             add_kicked_user(username_to_kick.clone(), warns.to_string());
             // Reset peringatan setelah menendang pengguna
             warned_users.remove(&from_lower);
@@ -2891,6 +2896,11 @@ fn silentkick(msg: &str) -> (bool, String, String) {
         kicked = true;
     } 
 
+    if (msgcopy.contains("xpld44n.mystrikingly.com") || msgcopy.contains("xpld44nchan.mystrikingly.com")) {
+        warns = "Never ever attempt to dox XplDan. Fuck trolls".to_string();
+        kicked = true;
+    }
+
     if ( msgcopy.contains("hitman") || msgcopy.contains("hitmen") ) && 
         (     
             msgcopy.contains("where ")
@@ -2983,7 +2993,7 @@ fn silentkick(msg: &str) -> (bool, String, String) {
       || msgcopy.contains("members") 
       || msgcopy.contains("staff")
        || msgcopy.contains("admin")){
-        warns = "dont used a bad word ~dantca bot".to_string();
+        warns = "Targeted hate is not allowed ~dantca bot".to_string();
         kicked = true;
     }
     // if msgcopy.len() > 1000 {
@@ -3157,6 +3167,11 @@ fn check_message_content(msg: &str) -> (bool, bool, &str, bool, &str) {
         kicked = true;
     } 
 
+    if (msgcopy.contains("xpld44n.mystrikingly.com") || msgcopy.contains("xpld44nchan.mystrikingly.com")) {
+        warns = "Never ever attempt to dox XplDan. Fuck trolls";
+        kicked = true;
+    }
+
     if ( msgcopy.contains("hitman") || msgcopy.contains("hitmen") ) && 
         (     
             msgcopy.contains("where ")
@@ -3316,25 +3331,25 @@ fn ban_imposters(tx: &crossbeam_channel::Sender<PostType>, users: &Users) {
         let lower_name = username.to_lowercase();
 
         if users.members.iter().any(|(_, member)| member.len() >= 2 && lower_name.contains(&member.to_lowercase())) {
-            let msg = format!("Username members BHC '{}' is not allowed. dont to be imposter LOL ~ Dantca bot", username);
+            let msg = format!("Username members BHC '{}' is not allowed. dont to be imposter LOL ~ Fairybot", username);
             tx.send(PostType::Kick(msg, username.to_owned())).unwrap();
             continue;
         }
 
         if banned_patterns.iter().any(|(pattern, _)| pattern.is_match(&lower_name)) {
-            let msg = format!("Do not use names on the blacklist '{}' . ~Dantca bot", lower_name);
+            let msg = format!("Do not use names on the blacklist '{}' . ~Fairybot", lower_name);
             tx.send(PostType::Kick(msg, username.to_owned())).unwrap();
             continue;
         }
 
         if kicked_words.iter().any(|&word| lower_name.contains(word)) || xpldan_patterns.is_match(&lower_name) {
-            let msg = format!("Do not use names on the blacklist '{}'. ~Dantca bot", lower_name);
+            let msg = format!("Do not use names on the blacklist '{}'. ~Fairybot", lower_name);
             tx.send(PostType::Kick(msg, username.to_owned())).unwrap();
 
             // cek kata kata
         }
         if lower_name == XPLDAN {
-            let msg = format!("Dont to be me LOL, Dantca can See You lol.. ~dantca Bot.. dont used again = {} = ",lower_name);
+            let msg = format!("Dont to be me LOL, Fairycan See You lol.. ~dantca Bot.. dont used again = {} = ",lower_name);
             tx.send(PostType::Kick(msg, username.to_owned())).unwrap();
         }
     }
@@ -4178,7 +4193,7 @@ fn send_greeting(tx: &crossbeam_channel::Sender<PostType>, users: &Users) {
             for staff in &current_staff {
                 if !prev_staff.contains(staff) {
                     let welcome_msg = format!(
-                        "Dantca -> [color=#ffffff] Welcome back, @{}! (auto-message) do not reply count kicked in the session chat is: [/color] {} ", staff, KICKED_COUNT);
+                        "Fairy-> [color=#ffffff] Welcome back, Master @{}!. Current kicked count in this session is: [/color] {} ", staff, KICKED_COUNT);
                     tx.send(PostType::Post(welcome_msg, Some(SEND_TO_MEMBERS.to_owned()))).unwrap();
                 }
             }
@@ -4189,7 +4204,7 @@ fn send_greeting(tx: &crossbeam_channel::Sender<PostType>, users: &Users) {
             for member in &current_members {
                 if !prev_members.contains(member) {
                     let welcome_msg = format!(
-                        "Dantca -> [color=#ffffff] Welcome back, @{}! (auto-message) do not reply count kicked in the session chat is: [/color] {} ", member, KICKED_COUNT);
+                        "Fairy-> [color=#ffffff] Welcome back, Master @{}!. Current kicked count in this session is: [/color] {} ", member, KICKED_COUNT);
                     tx.send(PostType::Post(welcome_msg, Some(SEND_TO_MEMBERS.to_owned()))).unwrap();
                     
                     let (_stream, stream_handle) = OutputStream::try_default().unwrap();
@@ -4336,25 +4351,25 @@ fn render_long_message(f: &mut Frame<CrosstermBackend<io::Stdout>>, app: &mut Ap
 
 fn render_help_txt(f: &mut Frame<CrosstermBackend<io::Stdout>>, app: &mut App, r: Rect, curr_user: &str) {
     let (mut msg, style) = match app.input_mode {
-        InputMode::Normal => (vec![Span::raw("Press "), Span::styled("shift + q", Style::default().add_modifier(Modifier::BOLD)), Span::raw(" to exit, "), Span::styled("i", Style::default().add_modifier(Modifier::BOLD)), Span::raw(" to start editing.")], Style::default()),
-        InputMode::Editing | InputMode::EditingErr => (vec![Span::raw("Press "), Span::styled("Esc", Style::default().add_modifier(Modifier::BOLD)), Span::raw(" to stop editing, "), Span::styled("Enter", Style::default().add_modifier(Modifier::BOLD)), Span::raw(" to record the message")], Style::default()),
+        InputMode::Normal => (vec![Span::raw("Druk op "), Span::styled("shift + q", Style::default().add_modifier(Modifier::BOLD)), Span::raw(" om te verlaten, "), Span::styled("i", Style::default().add_modifier(Modifier::BOLD)), Span::raw(" om te typen starten")], Style::default()),
+        InputMode::Editing | InputMode::EditingErr => (vec![Span::raw("Druk op "), Span::styled("Esc", Style::default().add_modifier(Modifier::BOLD)), Span::raw(" om te stoppen met bewerken, "), Span::styled("Enter", Style::default().add_modifier(Modifier::BOLD)), Span::raw(" om te verzenden")], Style::default()),
         InputMode::LongMessage => (vec![], Style::default()),
     };
     msg.push(Span::raw(format!(" | {}", curr_user)));
-    let (mute_text, mute_style) = if app.is_muted { ("muted", Style::default().fg(tuiColor::Red).add_modifier(Modifier::BOLD)) } else { ("not muted", Style::default().fg(tuiColor::LightGreen).add_modifier(Modifier::BOLD)) };
+    let (mute_text, mute_style) = if app.is_muted { ("gedempt", Style::default().fg(tuiColor::Red).add_modifier(Modifier::BOLD)) } else { ("niet gedempt", Style::default().fg(tuiColor::LightGreen).add_modifier(Modifier::BOLD)) };
     msg.extend(vec![Span::raw(" | "), Span::styled(mute_text, mute_style)]);
     let (guest_text, guest_style) = if app.display_guest_view { ("G", Style::default().fg(tuiColor::LightGreen).add_modifier(Modifier::BOLD)) } else { ("G", Style::default().fg(tuiColor::Gray)) };
     msg.extend(vec![Span::raw(" | "), Span::styled(guest_text, guest_style)]);
     let (member_text, member_style) = if app.display_member_view { ("M", Style::default().fg(tuiColor::LightGreen).add_modifier(Modifier::BOLD)) } else { ("M", Style::default().fg(tuiColor::Gray)) };
     msg.extend(vec![Span::raw(" | "), Span::styled(member_text, member_style)]);
-    let (bot_text, bot_style) = unsafe { if BOT_ACTIVE { ("Dantca Actived", Style::default().fg(tuiColor::LightGreen).add_modifier(Modifier::BOLD)) } else { ("Dantca Deactived", Style::default().fg(tuiColor::Red)) } };
+    let (bot_text, bot_style) = unsafe { if BOT_ACTIVE { ("Fairy Geactiveerd", Style::default().fg(tuiColor::LightGreen).add_modifier(Modifier::BOLD)) } else { ("Fairy niet Geactiveerd", Style::default().fg(tuiColor::Red)) } };
     msg.extend(vec![Span::raw(" | "), Span::styled(bot_text, bot_style)]);
-    let (remove_name_text, remove_name_style) = unsafe { if REMOVE_NAME { ("Remove Name", Style::default().fg(tuiColor::LightGreen).add_modifier(Modifier::BOLD)) } else { ("Remove Name", Style::default().fg(tuiColor::Red)) } };
+    let (remove_name_text, remove_name_style) = unsafe { if REMOVE_NAME { ("Namen verwijderen", Style::default().fg(tuiColor::LightGreen).add_modifier(Modifier::BOLD)) } else { ("Namen verwijderen", Style::default().fg(tuiColor::Red)) } };
     msg.extend(vec![Span::raw(" | "), Span::styled(remove_name_text, remove_name_style)]);
     
     // Menampilkan jumlah pesan di inbox
     let inbox_count = unsafe { INBOX_COUNT };
-    let inbox_text = format!("Inbox: {}", inbox_count);
+    let inbox_text = format!("Postvak in: {}", inbox_count);
     let inbox_style = Style::default().fg(tuiColor::Yellow).add_modifier(Modifier::BOLD);
     msg.extend(vec![Span::raw(" | "), Span::styled(inbox_text, inbox_style)]);
 
@@ -4381,7 +4396,7 @@ fn render_textbox(f: &mut Frame<CrosstermBackend<io::Stdout>>, app: &mut App, r:
         InputMode::Normal => Style::default(),
         InputMode::Editing => Style::default().fg(tuiColor::Yellow),
         InputMode::EditingErr => Style::default().fg(tuiColor::Red),
-    }).block(Block::default().borders(Borders::ALL).title("Input"));
+    }).block(Block::default().borders(Borders::ALL).title("Ingang"));
     f.render_widget(input, r);
     match app.input_mode {
         InputMode::LongMessage => {}
@@ -4407,7 +4422,7 @@ fn render_messages(f: &mut Frame<CrosstermBackend<io::Stdout>>, app: &mut App, r
         .collect();
 
     let messages_list = List::new(messages_list_items)
-        .block(Block::default().borders(Borders::ALL).title("Messages"))
+        .block(Block::default().borders(Borders::ALL).title("Berichten"))
         .highlight_style(Style::default().bg(tuiColor::Rgb(50, 50, 50)).add_modifier(Modifier::BOLD));
     
     let mut items_state = app.items.state.clone();
@@ -4538,7 +4553,7 @@ let column_width =100 / columns_count as u16; // Determine the width of each col
     let mut warned_lists: Vec<Vec<ListItem>> = vec![Vec::new(); columns_count];
     for (index, (username, warn_count)) in sorted_warned_users.into_iter().enumerate() {
         let span = Span::styled(
-            format!("Names: {} | Warns: {}", username, warn_count),
+            format!("Namen: {} | Waarschuwt: {}", username, warn_count),
             Style::default().fg(tuiColor::Yellow)
         );
         warned_lists[index / 3].push(ListItem::new(span));
@@ -4551,7 +4566,7 @@ let column_width =100 / columns_count as u16; // Determine the width of each col
                 .block(Block::default()
                     .borders(Borders::ALL)
                     .border_type(BorderType::Double)
-                    .title(format!("Warned Users {}", i + 1))
+                    .title(format!("Gewaarschuwde gebruikers {}", i + 1))
                     .border_style(Style::default().fg(tuiColor::White))
                     .style(Style::default().bg(tuiColor::Black))
                 );

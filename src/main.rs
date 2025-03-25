@@ -397,18 +397,16 @@ impl LeChatPHPClient {
                         "4" => "members",
                         _ => "unknown",
                     };
-                    
                     let msg_keep = format!("
                     [color=#ffffff]>>> H-E-L-L-O C-H-A-T-T-E-R-S W-E-L-C-O-M-E B-A-C-K TO BHC <<<[/color]
                     Keep it legal and enjoy your stay. 
                     You can try !-rules && ! help before. Please follow the !-rules
                      [color=#00ff08]kicked users in the sesions chat -> {} <- [/color]
                      Room Mode: {} - {}
-                     (Auto message)
+                     (Auto message - keepalive message)
                      ", kicked_count, mode_room.as_str(), mode_desc);
+                    tx.send(PostType::Upload("/home/whoami/Project/github/BHCLI-Tor/src/1564478315_13372.0.gif".to_string(), SEND_TO_ALL.to_string(), "Hey Hey All | keepalive".to_string())).unwrap();
                     tx.send(PostType::Post(msg_keep.to_owned(), Some(SEND_TO_ALL.to_owned()))).unwrap();
-                    thread::sleep(Duration::from_secs(280));
-                    tx.send(PostType::DeleteLast).unwrap();
                 };
 
                 // Cek apakah members, staff dan admin kosong
@@ -416,6 +414,8 @@ impl LeChatPHPClient {
                 let staff_empty = STAFF.lock().unwrap().is_empty();
                 let admins_empty = ADMINS.lock().unwrap().is_empty();
                 let timeout = after(Duration::from_secs(60 * 75));
+                                    // let timeout = after(Duration::from_secs(60));
+
                 select! {
                     recv(&last_post_rx) -> _ => {},
                     recv(&exit_rx) -> _ => return,
@@ -1571,12 +1571,17 @@ fn handle_remove_name(&mut self, _app: &mut App) {
                 _ => "unknown"
             };
             let msg = format!("Mode room changed to {} ({})", mode_desc, mode);
-            self.post_msg(PostType::Post(msg, Some(SEND_TO_ALL.to_owned()))).unwrap();
+            self.post_msg(PostType::Post(msg, Some(SEND_TO_MEMBERS.to_owned()))).unwrap();
+        } else if input.starts_with("/unban ") {
+            let username = remove_prefix(&input, "/unban ").to_owned();
+            self.post_msg(PostType::Unban(username.clone())).unwrap();
+        } else if input.starts_with("/selfout") {
+            self.post_msg(PostType::Keluar).unwrap();
         }else if input.starts_with("/") && !input.starts_with("/me ") {
             app.input_idx = input.len();
             app.input = input;
             app.input_mode = InputMode::EditingErr;
-        } else {
+        }  else {
             // Send normal message
             self.post_msg(PostType::Post(input, None)).unwrap();
         }
@@ -1868,6 +1873,19 @@ fn post_msg(
         let mut form: Option<multipart::Form> = None;
 
         match post_type {
+            PostType::Unban(username) => {
+                params.extend(vec![
+                    ("action", "admin".to_owned()),
+                    ("session", session.clone()),
+                    ("lang", LANG.to_owned()),
+                    ("nc", nc_value.to_owned()),
+                    ("do", "sessions".to_owned()),
+                    ("logout", "1".to_owned()),
+                    ("nick", username),
+                ]);
+
+                
+            }
             PostType::ModeRoom(mode) => {
                 params.extend(vec![
                     ("action", "admin".to_owned()),
@@ -2071,8 +2089,7 @@ fn post_msg(
 
                 // List of blocked user agents
                 let blocked_agents = vec![
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/11.1 Safari/605.1.15"
-                    // Add more blocked user agents as needed
+                    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_3_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.3 Mobile/15E148 Safari/604.1"
                 ];
 
                 // Store all users and their user agents first
@@ -2094,8 +2111,17 @@ fn post_msg(
                             // Store all users and their agents
                             user_agents.insert(nickname.clone(), user_agent.clone());
 
-                            // Check if user agent is in blocked list
-                            if blocked_agents.iter().any(|blocked| user_agent.contains(blocked)) {
+                            // Check if user agent is in blocked list and user is guest
+                            let is_guest = !{
+                                let previous = PREVIOUS_MEMBERS.lock().unwrap();
+                                if let Some(members) = &*previous {
+                                    members.contains(&nickname)
+                                } else {
+                                    false
+                                }
+                            };
+
+                            if is_guest && blocked_agents.iter().any(|blocked| user_agent.contains(blocked)) {
                                 blocked_users.push(nickname);
                             }
                         }
@@ -2111,7 +2137,7 @@ fn post_msg(
                     kick_params.extend(vec![
                         ("action", "post".to_owned()),
                         ("postid", postid_value.to_owned()),
-                        ("message", format!("Blocked user agent detected: {}", username)),
+                        ("message", format!("Blocked IP detected: {}", username)),
                         ("sendto", username.to_owned()),
                         ("kick", "kick".to_owned()),
                         ("what", "purge".to_owned()),
@@ -2461,7 +2487,11 @@ fn silentkicktoogle(active: bool, tx: &crossbeam_channel::Sender<PostType>) {
 use serde_json::json;
 use tokio::time::timeout;
 
+<<<<<<< HEAD
 const API_KEY: &str = "AIzaSyCjLGW-FuOBYQPdFgXfE4bZG8Vm0DBoPms";
+=======
+const API_KEY: &str = "AIzaSyANqX0oVW6-IXZAAOR_cVpuqYFSDkhiYfY";
+>>>>>>> fe41df099fdca2072a7aa6987d3e4457b7ea2d37
 const MAX_RESPONSE_LENGTH: usize = 1000;
 const API_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -2622,7 +2652,7 @@ async fn send_request(client: &reqwest::Client, url: &str, body: &serde_json::Va
 
         let message = format!("Hello @{}, here are the current user agents:\n{}", from, report);
         tx.send(PostType::DanUa).unwrap();
-        tx.send(PostType::Post(message, Some(SEND_TO_MEMBERS.to_owned()))).unwrap();
+        tx.send(PostType::Post(message, Some(SEND_TO_STAFFS.to_owned()))).unwrap();
     }
 // buat fub untuk fungsi ini agar bisa di panggil di proses message
     pub fn add_kicked_user(name: String, violation: String) {
@@ -3594,7 +3624,7 @@ fn get_guest_color(wanted: Option<String>) -> String {
 }
 
 fn get_tor_client(socks_proxy_url: &str, no_proxy: bool) -> Client {
-    let ua = "Mozilla/4.0 (compatible; MSIE 6.1; Windows NT)";
+    let ua = "im ghost no one know who am i??";
     let mut builder = reqwest::blocking::ClientBuilder::new()
         .redirect(Policy::none())
         .cookie_store(true)
@@ -3768,6 +3798,7 @@ fn main() -> anyhow::Result<()> {
 #[derive(Debug, Clone)]
 enum PostType {
     DanUa,
+    Unban(String),
     ModeRoom(String),
     HapusPesan(String),
     SilentBan(String),
